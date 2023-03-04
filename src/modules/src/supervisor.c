@@ -65,27 +65,27 @@ bool supervisorIsTumbled()
 // We cannot fly if the Crazyflie is tumbled and we cannot fly if the Crazyflie
 // is connected to a charger.
 //
-static bool canFlyCheck()
-{
-  if (isTumbled) {
-    return false;
-  }
-  return !pmIsChargerConnected();
-}
+// static bool canFlyCheck()
+// {
+//   if (isTumbled) {
+//     return false;
+//   }
+//   return !pmIsChargerConnected();
+// }
 
 //
 // We say we are flying if the sum of the ratios of all motors giving thrust
 // is above a certain threshold.
 //
-static bool isFlyingCheck()
-{
-  int sumRatio = 0;
-  for (int i = 0; i < NBR_OF_MOTORS; ++i) {
-    sumRatio += powerDistributionMotorType(i) * motorsGetRatio(i);
-  }
+// static bool isFlyingCheck()
+// {
+//   int sumRatio = 0;
+//   for (int i = 0; i < NBR_OF_MOTORS; ++i) {
+//     sumRatio += powerDistributionMotorType(i) * motorsGetRatio(i);
+//   }
 
-  return sumRatio > SUPERVISOR_FLIGHT_THRESHOLD;
-}
+//   return sumRatio > SUPERVISOR_FLIGHT_THRESHOLD;
+// }
 
 //
 // We say we are tumbled when the accelerometer reports negative values.
@@ -94,38 +94,38 @@ static bool isFlyingCheck()
 // the thrust to the motors, avoiding the Crazyflie from running propellers at
 // significant thrust when accidentally crashing into walls or the ground.
 //
-static bool isTumbledCheck(const sensorData_t *data)
-{
-  const float tolerance = -0.5;
-  static uint32_t hysteresis = 0;
-  //
-  // We need a SUPERVISOR_HYSTERESIS_THRESHOLD amount of readings that indicate
-  // that we are tumbled before we act on it. This is to reduce false positives.
-  //
-  if (data->acc.z <= tolerance) {
-    hysteresis++;
-    if (hysteresis > SUPERVISOR_HYSTERESIS_THRESHOLD) {
-      return true;
-    }
-  } else {
-    hysteresis = 0;
-  }
+// static bool isTumbledCheck(const sensorData_t *data)
+// {
+//   const float tolerance = -0.5;
+//   static uint32_t hysteresis = 0;
+//   //
+//   // We need a SUPERVISOR_HYSTERESIS_THRESHOLD amount of readings that indicate
+//   // that we are tumbled before we act on it. This is to reduce false positives.
+//   //
+//   if (data->acc.z <= tolerance) {
+//     hysteresis++;
+//     if (hysteresis > SUPERVISOR_HYSTERESIS_THRESHOLD) {
+//       return true;
+//     }
+//   } else {
+//     hysteresis = 0;
+//   }
 
-  return false;
-}
+//   return false;
+// }
 
-void supervisorUpdate(const sensorData_t *data)
-{
-  isFlying = isFlyingCheck();
+// void supervisorUpdate(const sensorData_t *data)
+// {
+//   isFlying = isFlyingCheck();
 
-  isTumbled = isTumbledCheck(data);
-  #if SUPERVISOR_TUMBLE_CHECK_ENABLE
-  if (isTumbled && isFlying) {
-    stabilizerSetEmergencyStop();
-  }
-  #endif
-  canFly = canFlyCheck();
-}
+//   isTumbled = isTumbledCheck(data);
+//   #if SUPERVISOR_TUMBLE_CHECK_ENABLE
+//   if (isTumbled && isFlying) {
+//     stabilizerSetEmergencyStop();
+//   }
+//   #endif
+//   canFly = canFlyCheck();
+// }
 
 /**
  *  System loggable variables to check different system states.

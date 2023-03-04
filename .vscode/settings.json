@@ -5,6 +5,8 @@
         "**/bower_components": true
     },
     "files.associations": {
-        "bootloader.h": "c"
+        "*.m": "matlab",
+        "bootloader.h": "c",
+        "compare": "c"
     }
 }

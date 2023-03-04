@@ -293,12 +293,12 @@ static void genericLocHandle(CRTPPacket* pk)
     case LPS_SHORT_LPP_PACKET:
       lpsShortLppPacketHandler(pk);
       break;
-    case EMERGENCY_STOP:
-      stabilizerSetEmergencyStop();
-      break;
-    case EMERGENCY_STOP_WATCHDOG:
-      stabilizerSetEmergencyStopTimeout(DEFAULT_EMERGENCY_STOP_TIMEOUT);
-      break;
+    // case EMERGENCY_STOP:
+    //   stabilizerSetEmergencyStop();
+    //   break;
+    // case EMERGENCY_STOP_WATCHDOG:
+    //   stabilizerSetEmergencyStopTimeout(DEFAULT_EMERGENCY_STOP_TIMEOUT);
+    //   break;
     case EXT_POSE:
       extPoseHandler(pk);
       break;

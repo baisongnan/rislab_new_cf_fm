@@ -10,7 +10,7 @@
 #include "pptraj.h"
 #include "planner.h"
 #include "stabilizer_types.h"
-#include "collision_avoidance.h"
+// #include "collision_avoidance.h"
 #include "imu_types.h"
 #include "controller_pid.h"
 #include "position_controller.h"
@@ -26,7 +26,7 @@
 %include "pptraj.h"
 %include "planner.h"
 %include "stabilizer_types.h"
-%include "collision_avoidance.h"
+// %include "collision_avoidance.h"
 %include "controller_pid.h"
 %include "imu_types.h"
 %include "controller_mellinger.h"
@@ -70,24 +70,24 @@ struct vec3_s svec2vec(struct vec v)
     return vv;
 }
 
-void collisionAvoidanceUpdateSetpointWrap(
-    collision_avoidance_params_t const *params,
-    collision_avoidance_state_t *collisionState,
-    int nOthers,
-    float const *otherPositions,
-    setpoint_t *setpoint, sensorData_t const *sensorData, state_t const *state)
-{
-    nOthers /= 3;
-    float *workspace = malloc(sizeof(float) * 7 * (nOthers + 6));
-    collisionAvoidanceUpdateSetpointCore(
-        params,
-        collisionState,
-        nOthers,
-        otherPositions,
-        workspace,
-        setpoint, sensorData, state);
-    free(workspace);
-}
+// void collisionAvoidanceUpdateSetpointWrap(
+//     collision_avoidance_params_t const *params,
+//     collision_avoidance_state_t *collisionState,
+//     int nOthers,
+//     float const *otherPositions,
+//     setpoint_t *setpoint, sensorData_t const *sensorData, state_t const *state)
+// {
+//     nOthers /= 3;
+//     float *workspace = malloc(sizeof(float) * 7 * (nOthers + 6));
+//     collisionAvoidanceUpdateSetpointCore(
+//         params,
+//         collisionState,
+//         nOthers,
+//         otherPositions,
+//         workspace,
+//         setpoint, sensorData, state);
+//     free(workspace);
+// }
 
 void assertFail(char *exp, char *file, int line) {
     char buf[150];

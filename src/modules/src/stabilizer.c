@@ -46,12 +46,12 @@
 #include "crtp_localization_service.h"
 #include "controller.h"
 #include "power_distribution.h"
-#include "collision_avoidance.h"
+// #include "collision_avoidance.h"
 #include "health.h"
-#include "supervisor.h"
+// #include "supervisor.h"
 
 #include "estimator.h"
-#include "usddeck.h"
+// #include "usddeck.h"
 #include "quatcompress.h"
 #include "statsCnt.h"
 #include "static_mem.h"
@@ -59,7 +59,7 @@
 
 static bool isInit;
 static bool emergencyStop = false;
-static int emergencyStopTimeout = EMERGENCY_STOP_TIMEOUT_DISABLED;
+// static int emergencyStopTimeout = EMERGENCY_STOP_TIMEOUT_DISABLED;
 
 static uint32_t inToOutLatency;
 
@@ -69,12 +69,15 @@ static sensorData_t sensorData;
 static state_t state;
 static control_t control;
 
+static float attitude_control_limit;
+bool thrust_flag;
+
 static motors_thrust_uncapped_t motorThrustUncapped;
 static motors_thrust_uncapped_t motorThrustBatCompUncapped;
 static motors_thrust_pwm_t motorPwm;
 
 // For scratch storage - never logged or passed to other subsystems.
-static setpoint_t tempSetpoint;
+// static setpoint_t tempSetpoint;
 
 static StateEstimatorType estimatorType;
 static ControllerType controllerType;
@@ -131,17 +134,21 @@ static void calcSensorToOutputLatency(const sensorData_t *sensorData)
 
 static void compressState()
 {
-  stateCompressed.x = state.position.x * 1000.0f;
-  stateCompressed.y = state.position.y * 1000.0f;
-  stateCompressed.z = state.position.z * 1000.0f;
+  // stateCompressed.x = state.position.x * 1000.0f;
+  // stateCompressed.y = state.position.y * 1000.0f;
+  // stateCompressed.z = state.position.z * 1000.0f;
 
-  stateCompressed.vx = state.velocity.x * 1000.0f;
-  stateCompressed.vy = state.velocity.y * 1000.0f;
-  stateCompressed.vz = state.velocity.z * 1000.0f;
+  // stateCompressed.vx = state.velocity.x * 1000.0f;
+  // stateCompressed.vy = state.velocity.y * 1000.0f;
+  // stateCompressed.vz = state.velocity.z * 1000.0f;
 
-  stateCompressed.ax = state.acc.x * 9.81f * 1000.0f;
-  stateCompressed.ay = state.acc.y * 9.81f * 1000.0f;
-  stateCompressed.az = (state.acc.z + 1) * 9.81f * 1000.0f;
+  // stateCompressed.ax = state.acc.x * 9.81f * 1000.0f;
+  // stateCompressed.ay = state.acc.y * 9.81f * 1000.0f;
+  // stateCompressed.az = (state.acc.z + 1) * 9.81f * 1000.0f;
+
+  stateCompressed.ax = sensorData.acc.x * 9810.0f;
+  stateCompressed.ay = sensorData.acc.y * 9810.0f;
+  stateCompressed.az = (sensorData.acc.z - 1) * 9810.0f;
 
   float const q[4] = {
     state.attitudeQuaternion.x,
@@ -156,20 +163,18 @@ static void compressState()
   stateCompressed.rateYaw = sensorData.gyro.z * deg2millirad;
 }
 
-static void compressSetpoint()
-{
-  setpointCompressed.x = setpoint.position.x * 1000.0f;
-  setpointCompressed.y = setpoint.position.y * 1000.0f;
-  setpointCompressed.z = setpoint.position.z * 1000.0f;
-
-  setpointCompressed.vx = setpoint.velocity.x * 1000.0f;
-  setpointCompressed.vy = setpoint.velocity.y * 1000.0f;
-  setpointCompressed.vz = setpoint.velocity.z * 1000.0f;
-
-  setpointCompressed.ax = setpoint.acceleration.x * 1000.0f;
-  setpointCompressed.ay = setpoint.acceleration.y * 1000.0f;
-  setpointCompressed.az = setpoint.acceleration.z * 1000.0f;
-}
+// static void compressSetpoint()
+// {
+//   setpointCompressed.x = setpoint.position.x * 1000.0f;
+//   setpointCompressed.y = setpoint.position.y * 1000.0f;
+//   setpointCompressed.z = setpoint.position.z * 1000.0f;
+//   setpointCompressed.vx = setpoint.velocity.x * 1000.0f;
+//   setpointCompressed.vy = setpoint.velocity.y * 1000.0f;
+//   setpointCompressed.vz = setpoint.velocity.z * 1000.0f;
+//   setpointCompressed.ax = setpoint.acceleration.x * 1000.0f;
+//   setpointCompressed.ay = setpoint.acceleration.y * 1000.0f;
+//   setpointCompressed.az = setpoint.acceleration.z * 1000.0f;
+// }
 
 void stabilizerInit(StateEstimatorType estimator)
 {
@@ -181,7 +186,7 @@ void stabilizerInit(StateEstimatorType estimator)
   controllerInit(ControllerTypeAutoSelect);
   powerDistributionInit();
   motorsInit(platformConfigGetMotorMapping());
-  collisionAvoidanceInit();
+  // collisionAvoidanceInit();
   estimatorType = stateEstimatorGetType();
   controllerType = controllerGetType();
 
@@ -199,21 +204,20 @@ bool stabilizerTest(void)
   pass &= controllerTest();
   pass &= powerDistributionTest();
   pass &= motorsTest();
-  pass &= collisionAvoidanceTest();
+  // pass &= collisionAvoidanceTest();
 
   return pass;
 }
 
-static void checkEmergencyStopTimeout()
-{
-  if (emergencyStopTimeout >= 0) {
-    emergencyStopTimeout -= 1;
-
-    if (emergencyStopTimeout == 0) {
-      emergencyStop = true;
-    }
-  }
-}
+// static void checkEmergencyStopTimeout()
+// {
+//   if (emergencyStopTimeout >= 0) {
+//     emergencyStopTimeout -= 1;
+//     if (emergencyStopTimeout == 0) {
+//       emergencyStop = true;
+//     }
+//   }
+// }
 
 static void batteryCompensation(const motors_thrust_uncapped_t* motorThrustUncapped, motors_thrust_uncapped_t* motorThrustBatCompUncapped)
 {
@@ -260,6 +264,9 @@ static void stabilizerTask(void* param)
 
   DEBUG_PRINT("Ready to fly.\n");
 
+  attitude_control_limit = 1000.0f;
+  thrust_flag = true; 
+
   while(1) {
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
@@ -284,24 +291,49 @@ static void stabilizerTask(void* param)
       stateEstimator(&state, tick);
       compressState();
 
-      if (crtpCommanderHighLevelGetSetpoint(&tempSetpoint, &state, tick)) {
-        commanderSetSetpoint(&tempSetpoint, COMMANDER_PRIORITY_HIGHLEVEL);
-      }
+      // if (crtpCommanderHighLevelGetSetpoint(&tempSetpoint, &state, tick)) {
+      //   commanderSetSetpoint(&tempSetpoint, COMMANDER_PRIORITY_HIGHLEVEL);
+      // }
 
       commanderGetSetpoint(&setpoint, &state);
-      compressSetpoint();
+      // compressSetpoint();
 
-      collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
+      // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
       controller(&control, &setpoint, &sensorData, &state, tick);
 
-      checkEmergencyStopTimeout();
+      // checkEmergencyStopTimeout();
 
       //
       // The supervisor module keeps track of Crazyflie state such as if
       // we are ok to fly, or if the Crazyflie is in flight.
       //
-      supervisorUpdate(&sensorData);
+      // supervisorUpdate(&sensorData);
+
+      if (setpoint.thrust < attitude_control_limit) // disable the attitude controller when the desired thrust is close to zero
+      { 
+        thrust_flag = false;
+        control.thrust = 0.0f;
+      }
+      else
+      {
+        if (thrust_flag){
+          ;
+        }
+        else
+        {
+          if (stateCompressed.az > 2000)
+          {
+            thrust_flag = true;
+          }
+          else
+          {
+            control.thrust = 0.0f;
+          }
+        }
+      }
+
+
 
       if (emergencyStop || (systemIsArmed() == false)) {
         motorsStop();
@@ -312,14 +344,14 @@ static void stabilizerTask(void* param)
         setMotorRatios(&motorPwm);
       }
 
-#ifdef CONFIG_DECK_USD
-      // Log data to uSD card if configured
-      if (usddeckLoggingEnabled()
-          && usddeckLoggingMode() == usddeckLoggingMode_SynchronousStabilizer
-          && RATE_DO_EXECUTE(usddeckFrequency(), tick)) {
-        usddeckTriggerLogging();
-      }
-#endif
+// #ifdef CONFIG_DECK_USD
+//       // Log data to uSD card if configured
+//       if (usddeckLoggingEnabled()
+//           && usddeckLoggingMode() == usddeckLoggingMode_SynchronousStabilizer
+//           && RATE_DO_EXECUTE(usddeckFrequency(), tick)) {
+//         usddeckTriggerLogging();
+//       }
+// #endif
       calcSensorToOutputLatency(&sensorData);
       tick++;
       STATS_CNT_RATE_EVENT(&stabilizerRate);
@@ -337,21 +369,19 @@ static void stabilizerTask(void* param)
   }
 }
 
-void stabilizerSetEmergencyStop()
-{
-  emergencyStop = true;
-}
-
-void stabilizerResetEmergencyStop()
-{
-  emergencyStop = false;
-}
-
-void stabilizerSetEmergencyStopTimeout(int timeout)
-{
-  emergencyStop = false;
-  emergencyStopTimeout = timeout;
-}
+// void stabilizerSetEmergencyStop()
+// {
+//   emergencyStop = true;
+// }
+// void stabilizerResetEmergencyStop()
+// {
+//   emergencyStop = false;
+// }
+// void stabilizerSetEmergencyStopTimeout(int timeout)
+// {
+//   emergencyStop = false;
+//   emergencyStopTimeout = timeout;
+// }
 
 /**
  * Parameters to set the estimator and controller type
@@ -372,6 +402,8 @@ PARAM_ADD_CORE(PARAM_UINT8, controller, &controllerType)
  * @brief If set to nonzero will turn off power
  */
 PARAM_ADD_CORE(PARAM_UINT8, stop, &emergencyStop)
+
+PARAM_ADD(PARAM_FLOAT, acl, &attitude_control_limit)
 PARAM_GROUP_STOP(stabilizer)
 
 
