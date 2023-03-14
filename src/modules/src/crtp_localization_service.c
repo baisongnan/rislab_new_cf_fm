@@ -39,6 +39,7 @@
 #include "configblock.h"
 #include "worker.h"
 #include "autoconf.h"
+#include "sensfusion6.h"
 
 #ifdef CONFIG_DECK_LIGHTHOUSE
 #include "lighthouse_storage.h"
@@ -130,6 +131,7 @@ static void extPositionHandler(CRTPPacket* pk);
 static void genericLocHandle(CRTPPacket* pk);
 static void extPositionPackedHandler(CRTPPacket* pk);
 
+
 void locSrvInit()
 {
   if (isInit) {
@@ -192,10 +194,17 @@ static void extPoseHandler(const CRTPPacket* pk) {
   ext_pose.quat.y = data->qy;
   ext_pose.quat.z = data->qz;
   ext_pose.quat.w = data->qw;
+  // ext_pose.quat.x = 0.0f;
+  // ext_pose.quat.y = 1.0f;
+  // ext_pose.quat.z = 0.0f;
+  // ext_pose.quat.w = 0.0f;
   ext_pose.stdDevPos = extPosStdDev;
   ext_pose.stdDevQuat = extQuatStdDev;
 
-  estimatorEnqueuePose(&ext_pose);
+  // estimatorEnqueuePose(&ext_pose);
+
+  // send these data to sensfusion6
+  setquat(data->qw, data->qx, data->qy, data->qz);
   tickOfLastPacket = xTaskGetTickCount();
 }
 
@@ -210,14 +219,15 @@ static void extPosePackedHandler(const CRTPPacket* pk) {
       quatdecompress(item->quat, (float *)&ext_pose.quat.q0);
       ext_pose.stdDevPos = extPosStdDev;
       ext_pose.stdDevQuat = extQuatStdDev;
-      estimatorEnqueuePose(&ext_pose);
+      // estimatorEnqueuePose(&ext_pose);
+      // setquat(ext_pose.quat.w, ext_pose.quat.x, ext_pose.quat.y, ext_pose.quat.z);
       tickOfLastPacket = xTaskGetTickCount();
     } else {
       ext_pos.x = item->x / 1000.0f;
       ext_pos.y = item->y / 1000.0f;
       ext_pos.z = item->z / 1000.0f;
       ext_pos.stdDev = extPosStdDev;
-      peerLocalizationTellPosition(item->id, &ext_pos);
+      // peerLocalizationTellPosition(item->id, &ext_pos);
     }
   }
 }

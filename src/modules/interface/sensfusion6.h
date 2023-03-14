@@ -27,6 +27,7 @@
 #define SENSORFUSION6_H_
 #include <stdbool.h>
 
+void setquat(float w, float x, float y, float z);
 void sensfusion6Init(void);
 bool sensfusion6Test(void);
 

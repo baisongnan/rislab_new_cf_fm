@@ -54,6 +54,14 @@ float qx = 0.0f;
 float qy = 0.0f;
 float qz = 0.0f;  // quaternion of sensor frame relative to auxiliary frame
 
+void setquat(float w, float x, float y, float z) 
+{
+  qw = w;
+  qx = x;
+  qy = y;
+  qz = z;
+}
+
 static float gravX, gravY, gravZ; // Unit vector in the estimated gravity direction
 
 // The acc in Z for static position (g)
