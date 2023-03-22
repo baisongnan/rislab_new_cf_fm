@@ -132,11 +132,19 @@ float lim_num(float in, float num)
     return in;
 }
 
+// Function to determine if two quaternions represent the same attitude
+bool same_attitude(float w, float x, float y, float z, float w_d, float x_d, float y_d, float z_d)
+{
+  // Calculate the dot product of the two quaternions
+  float dot_product = w * w_d + x * x_d + y * y_d + z * z_d;
+  // Check if the absolute value of the dot product is close to 1
+  return fabsf(dot_product) > 0.999999f;
+}
+
 void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
 {
-  if ((fabsf(w - w_d) < 1.0E-6F) && (fabsf(x - x_d) < 1.0E-6F) &&
-      (fabsf(y - y_d) < 1.0E-6F) && (fabsf(z - z_d) < 1.0E-6F))
+  if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
   {
     *tau_x = 0.0F;
     *tau_y = 0.0F;
@@ -467,7 +475,7 @@ static void stabilizerTask(void *param)
         if (setpoint.timestamp > timestamp_setpoint)
           // time_gap_setpoint = setpoint.timestamp - timestamp_setpoint;
 
-        timestamp_setpoint = setpoint.timestamp;
+          timestamp_setpoint = setpoint.timestamp;
 
         qw_desired_delay = qw_desired;
         qx_desired_delay = qx_desired;
@@ -476,12 +484,12 @@ static void stabilizerTask(void *param)
 
         // compute desired quat
         eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
-                  setpoint.attitude.pitch * -0.0174532925199433f,
-                  setpoint.attitude.roll * 0.0174532925199433f,
-                  &qw_desired,
-                  &qx_desired,
-                  &qy_desired,
-                  &qz_desired);
+                    setpoint.attitude.pitch * -0.0174532925199433f,
+                    setpoint.attitude.roll * 0.0174532925199433f,
+                    &qw_desired,
+                    &qx_desired,
+                    &qy_desired,
+                    &qz_desired);
 
         pcontrol(qw_desired_delay,
                  qx_desired_delay,
@@ -496,7 +504,7 @@ static void stabilizerTask(void *param)
         // desired angular rate in degrees
         omega_x = omega_x * 57.2957795130823f * external_loop_freq;
         omega_y = omega_y * 57.2957795130823f * external_loop_freq;
-        omega_z = omega_z * 57.2957795130823f * external_loop_freq; 
+        omega_z = omega_z * 57.2957795130823f * external_loop_freq;
 
         omega_x = lim_num(omega_x, 2000);
         omega_y = lim_num(omega_y, 2000);
@@ -517,9 +525,9 @@ static void stabilizerTask(void *param)
                  &tau_x, &tau_y, &tau_z);
 
         control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy + (omega_x- sensorData.gyro.x) * kd_xy);
-        control.pitch = -(int16_t)limint16(tau_y * kp_xy + (omega_y- sensorData.gyro.y) * kd_xy);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z- sensorData.gyro.z) * kd_z);
+        control.roll = (int16_t)limint16(tau_x * kp_xy + (omega_x - sensorData.gyro.x) * kd_xy);
+        control.pitch = -(int16_t)limint16(tau_y * kp_xy + (omega_y - sensorData.gyro.y) * kd_xy);
+        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
       }
       else
       {
