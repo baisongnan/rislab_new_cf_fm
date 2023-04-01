@@ -84,7 +84,10 @@ static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
 
 static float kp_xy = 6000;
+static float kp_xy_temp = 6000;
 static float kp_z = 6000;
+static float kp_z_temp = 6000;
+
 
 static float kd_xy = 10;
 static float kd_z = 10;
@@ -420,7 +423,7 @@ static void stabilizerTask(void *param)
 
   DEBUG_PRINT("Ready to fly.\n");
 
-  attitude_control_limit = 1000.0f;
+  attitude_control_limit = 1300.0f;
   thrust_flag = true;
 
   while (1)
@@ -463,6 +466,16 @@ static void stabilizerTask(void *param)
       // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
       // controller(&control, &setpoint, &sensorData, &state, tick);
+
+      // disable P controller when thrust is equal to attitude_control_limit
+      if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f){
+        kp_xy_temp = 0.0f;
+        kp_z_temp = 0.0f;
+      }
+      else{
+        kp_xy_temp = kp_xy;
+        kp_z_temp = kp_z;
+      }
 
       if (timestamp_setpoint == setpoint.timestamp)
       {
@@ -525,8 +538,8 @@ static void stabilizerTask(void *param)
                  &tau_x, &tau_y, &tau_z);
 
         control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy + (omega_x - sensorData.gyro.x) * kd_xy);
-        control.pitch = -(int16_t)limint16(tau_y * kp_xy + (omega_y - sensorData.gyro.y) * kd_xy);
+        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
+        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + (omega_y - sensorData.gyro.y) * kd_xy);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
       }
       else
@@ -545,29 +558,29 @@ static void stabilizerTask(void *param)
       //
       // supervisorUpdate(&sensorData);
 
-      if (setpoint.thrust < attitude_control_limit) // disable the attitude controller when the desired thrust is close to zero
-      {
-        thrust_flag = false;
-        control.thrust = 0.0f;
-      }
-      else
-      {
-        if (thrust_flag)
-        {
-          ;
-        }
-        else
-        {
-          if (stateCompressed.az > 2000)
-          {
-            thrust_flag = true;
-          }
-          else
-          {
-            control.thrust = 0.0f;
-          }
-        }
-      }
+      // if (setpoint.thrust < attitude_control_limit) // disable the attitude controller when the desired thrust is close to zero
+      // {
+      //   thrust_flag = false;
+      //   control.thrust = 0.0f;
+      // }
+      // else
+      // {
+      //   if (thrust_flag)
+      //   {
+      //     ;
+      //   }
+      //   else
+      //   {
+      //     if (stateCompressed.az > 2000)
+      //     {
+      //       thrust_flag = true;
+      //     }
+      //     else
+      //     {
+      //       control.thrust = 0.0f;
+      //     }
+      //   }
+      // }
 
       if (emergencyStop || (systemIsArmed() == false))
       {
