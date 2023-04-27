@@ -144,72 +144,142 @@ bool same_attitude(float w, float x, float y, float z, float w_d, float x_d, flo
   return fabsf(dot_product) > 0.999999f;
 }
 
+// void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
+//               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
+// {
+//   if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
+//   {
+//     *tau_x = 0.0F;
+//     *tau_y = 0.0F;
+//     *tau_z = 0.0F;
+//   }
+//   else
+//   {
+//     float b_temp2_tmp;
+//     float temp2_tmp;
+//     float wwd;
+//     float x2;
+//     float xd2;
+//     float xxd;
+//     float y2;
+//     float yd2;
+//     float yyd;
+//     float z2;
+//     float zd2;
+//     float zzd;
+//     wwd = w * w_d;
+//     xxd = x * x_d;
+//     yyd = y * y_d;
+//     zzd = z * z_d;
+//     x2 = x * x;
+//     y2 = y * y;
+//     z2 = z * z;
+//     xd2 = x_d * x_d;
+//     yd2 = y_d * y_d;
+//     zd2 = z_d * z_d;
+//     temp2_tmp = 2.0F * xxd;
+//     b_temp2_tmp = 2.0F * wwd;
+//     x2 = (((((((((((((((((((-2.0F * x2 * xd2 - x2 * yd2) - x2 * zd2) + x2) -
+//                          temp2_tmp * yyd) -
+//                         temp2_tmp * zzd) -
+//                        b_temp2_tmp * xxd) -
+//                       xd2 * y2) -
+//                      xd2 * z2) +
+//                     xd2) -
+//                    2.0F * y2 * yd2) -
+//                   y2 * zd2) +
+//                  y2) -
+//                 2.0F * yyd * zzd) -
+//                b_temp2_tmp * yyd) -
+//               yd2 * z2) +
+//              yd2) -
+//             2.0F * z2 * zd2) +
+//            z2) -
+//           b_temp2_tmp * zzd) +
+//          zd2;
+//     if (x2 <= 0.0F)
+//     {
+//       *tau_x = 0.0F;
+//       *tau_y = 0.0F;
+//       *tau_z = 0.0F;
+//     }
+//     else
+//     {
+//       x2 = 2.0F * acosf(((wwd + xxd) + yyd) + zzd) / sqrtf(x2);
+//       *tau_x = x2 * (((w * x_d - w_d * x) - y * z_d) + y_d * z);
+//       *tau_y = x2 * (((w * y_d - w_d * y) + x * z_d) - x_d * z);
+//       *tau_z = x2 * (((w * z_d - w_d * z) - x * y_d) + x_d * y);
+//     }
+//   }
+// }
+
 void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
-              float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
+               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
 {
-  if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
-  {
+
+  // if (w*w_d<0.0f)
+  // {
+  //   w_d = -w_d;
+  //   x_d = -x_d;
+  //   y_d = -y_d;
+  //   z_d = -z_d;
+  // }
+
+  if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d)) {
     *tau_x = 0.0F;
     *tau_y = 0.0F;
     *tau_z = 0.0F;
-  }
-  else
-  {
-    float b_temp2_tmp;
-    float temp2_tmp;
-    float wwd;
-    float x2;
-    float xd2;
-    float xxd;
-    float y2;
-    float yd2;
-    float yyd;
-    float z2;
-    float zd2;
-    float zzd;
-    wwd = w * w_d;
-    xxd = x * x_d;
-    yyd = y * y_d;
-    zzd = z * z_d;
-    x2 = x * x;
-    y2 = y * y;
-    z2 = z * z;
-    xd2 = x_d * x_d;
-    yd2 = y_d * y_d;
-    zd2 = z_d * z_d;
-    temp2_tmp = 2.0F * xxd;
-    b_temp2_tmp = 2.0F * wwd;
-    x2 = (((((((((((((((((((-2.0F * x2 * xd2 - x2 * yd2) - x2 * zd2) + x2) -
-                         temp2_tmp * yyd) -
-                        temp2_tmp * zzd) -
-                       b_temp2_tmp * xxd) -
-                      xd2 * y2) -
-                     xd2 * z2) +
-                    xd2) -
-                   2.0F * y2 * yd2) -
-                  y2 * zd2) +
-                 y2) -
-                2.0F * yyd * zzd) -
-               b_temp2_tmp * yyd) -
-              yd2 * z2) +
-             yd2) -
-            2.0F * z2 * zd2) +
-           z2) -
-          b_temp2_tmp * zzd) +
-         zd2;
-    if (x2 <= 0.0F)
-    {
-      *tau_x = 0.0F;
-      *tau_y = 0.0F;
-      *tau_z = 0.0F;
+  } else {
+    float axang1;
+    float axang2;
+    float axang3;
+    float axang4;
+    float rot1;
+    float temp_1;
+    
+    temp_1 = ((w * w_d + x * x_d) + y * y_d) + z * z_d;
+    
+    if (temp_1 == 1.0F) {
+      /*  axang = [0, 0, 1, 0]; */
+      axang1 = 0.0F;
+      axang2 = 0.0F;
+      axang3 = 1.0F;
+      axang4 = 0.0F;
+    } else {
+      
+      axang4 = sqrtf(1.0F - temp_1 * temp_1);
+      axang1 = (((w * x_d - w_d * x) + y * z_d) - y_d * z) / axang4;
+      axang2 = (((w * y_d - w_d * y) - x * z_d) + x_d * z) / axang4;
+      axang3 = (((w * z_d - w_d * z) + x * y_d) - x_d * y) / axang4;
+      axang4 = 2.0F * acosf(temp_1);
     }
-    else
-    {
-      x2 = 2.0F * acosf(((wwd + xxd) + yyd) + zzd) / sqrtf(x2);
-      *tau_x = x2 * (((w * x_d - w_d * x) - y * z_d) + y_d * z);
-      *tau_y = x2 * (((w * y_d - w_d * y) + x * z_d) - x_d * z);
-      *tau_z = x2 * (((w * z_d - w_d * z) - x * y_d) + x_d * y);
+    
+    if (axang4 > 3.1415926535897931f) {
+      axang4 = 6.28318548F - axang4;
+      axang1 = -axang1;
+      axang2 = -axang2;
+      axang3 = -axang3;
     }
+    else if  (axang4 < -3.1415926535897931f)
+    {
+      axang4 += 6.28318548F + axang4;
+      axang1 = -axang1;
+      axang2 = -axang2;
+      axang3 = -axang3;
+    }
+    
+    rot1 = axang1 * axang4;
+    axang1 = axang2 * axang4;
+    temp_1 = axang3 * axang4;
+    
+    axang4 = (rot1 * x + axang1 * y) + temp_1 * z;
+    axang2 = (rot1 * w - temp_1 * y) + axang1 * z;
+    axang3 = (axang1 * w + temp_1 * x) - rot1 * z;
+    temp_1 = (temp_1 * w - axang1 * x) + rot1 * y;
+    
+    *tau_x = ((w * axang2 - y * temp_1) + x * axang4) + z * axang3;
+    *tau_y = ((w * axang3 + x * temp_1) + y * axang4) - z * axang2;
+    *tau_z = ((w * temp_1 - x * axang3) + y * axang2) + z * axang4;
   }
 }
 
