@@ -108,10 +108,10 @@ static float qx_desired = 0.0f;
 static float qy_desired = 0.0f;
 static float qz_desired = 0.0f;
 
-// static float qw_desired_delay = 1.0f;
-// static float qx_desired_delay = 0.0f;
-// static float qy_desired_delay = 0.0f;
-// static float qz_desired_delay = 0.0f;
+static float qw_desired_delay = 1.0f;
+static float qx_desired_delay = 0.0f;
+static float qy_desired_delay = 0.0f;
+static float qz_desired_delay = 0.0f;
 
 uint32_t timestamp_setpoint = 0;
 
@@ -563,10 +563,10 @@ static void stabilizerTask(void *param)
 
           timestamp_setpoint = setpoint.timestamp;
 
-        // qw_desired_delay = qw_desired;
-        // qx_desired_delay = qx_desired;
-        // qy_desired_delay = qy_desired;
-        // qz_desired_delay = qz_desired;
+        qw_desired_delay = qw_desired;
+        qx_desired_delay = qx_desired;
+        qy_desired_delay = qy_desired;
+        qz_desired_delay = qz_desired;
 
         // compute desired quat
         eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
@@ -577,24 +577,24 @@ static void stabilizerTask(void *param)
                     &qy_desired,
                     &qz_desired);
 
-        // pcontrol(qw_desired_delay,
-        //          qx_desired_delay,
-        //          qy_desired_delay,
-        //          qz_desired_delay,
-        //          qw_desired,
-        //          qx_desired,
-        //          qy_desired,
-        //          qz_desired,
-        //          &omega_x, &omega_y, &omega_z);
+        pcontrol(qw_desired_delay,
+                 qx_desired_delay,
+                 qy_desired_delay,
+                 qz_desired_delay,
+                 qw_desired,
+                 qx_desired,
+                 qy_desired,
+                 qz_desired,
+                 &omega_x, &omega_y, &omega_z);
 
         // // desired angular rate in degrees
-        // omega_x = omega_x * 57.2957795130823f * external_loop_freq;
-        // omega_y = omega_y * 57.2957795130823f * external_loop_freq;
-        // omega_z = omega_z * 57.2957795130823f * external_loop_freq;
+        omega_x = omega_x * 57.2957795130823f * external_loop_freq;
+        omega_y = omega_y * 57.2957795130823f * external_loop_freq;
+        omega_z = omega_z * 57.2957795130823f * external_loop_freq;
 
-        // omega_x = lim_num(omega_x, 2000);
-        // omega_y = lim_num(omega_y, 2000);
-        // omega_z = lim_num(omega_z, 2000);
+        omega_x = lim_num(omega_x, 2000);
+        omega_y = lim_num(omega_y, 2000);
+        omega_z = lim_num(omega_z, 2000);
       }
 
       if (setpoint.thrust >= 10.0f)
@@ -610,20 +610,20 @@ static void stabilizerTask(void *param)
                  qz_desired,
                  &tau_x, &tau_y, &tau_z);
 
-        float angle_error = sqrtf(tau_x * tau_x + tau_y * tau_y + tau_z * tau_z);
+        // float angle_error = sqrtf(tau_x * tau_x + tau_y * tau_y + tau_z * tau_z);
 
-        if (angle_error > angle_error_threshold)
-        {
-          omega_x = (tau_x/angle_error) * angle_error_velocity;
-          omega_y = (tau_y/angle_error) * angle_error_velocity;
-          omega_z = (tau_z/angle_error) * angle_error_velocity;
-        }
-        else
-        {
-          omega_x = 0.0f;
-          omega_y = 0.0f;
-          omega_z = 0.0f;
-        }
+        // if (angle_error > angle_error_threshold)
+        // {
+        //   omega_x = (tau_x/angle_error) * angle_error_velocity;
+        //   omega_y = (tau_y/angle_error) * angle_error_velocity;
+        //   omega_z = (tau_z/angle_error) * angle_error_velocity;
+        // }
+        // else
+        // {
+        //   omega_x = 0.0f;
+        //   omega_y = 0.0f;
+        //   omega_z = 0.0f;
+        // }
 
 
         control.thrust = setpoint.thrust;
