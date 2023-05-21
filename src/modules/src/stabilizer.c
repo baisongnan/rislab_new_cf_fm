@@ -91,7 +91,6 @@ static float kp_z_temp = 6000;
 static float angle_error_threshold = 1.57f;
 static float angle_error_velocity = 300.0f;
 
-
 static float kd_xy = 10;
 static float kd_z = 10;
 
@@ -217,7 +216,7 @@ bool same_attitude(float w, float x, float y, float z, float w_d, float x_d, flo
 // }
 
 void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
-               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
+              float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
 {
 
   // if (w*w_d<0.0f)
@@ -228,58 +227,65 @@ void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
   //   z_d = -z_d;
   // }
 
-  if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d)) {
+  if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
+  {
     *tau_x = 0.0F;
     *tau_y = 0.0F;
     *tau_z = 0.0F;
-  } else {
+  }
+  else
+  {
     float axang1;
     float axang2;
     float axang3;
     float axang4;
     float rot1;
     float temp_1;
-    
+
     temp_1 = ((w * w_d + x * x_d) + y * y_d) + z * z_d;
-    
-    if (temp_1 == 1.0F) {
+
+    if (temp_1 == 1.0F)
+    {
       /*  axang = [0, 0, 1, 0]; */
       axang1 = 0.0F;
       axang2 = 0.0F;
       axang3 = 1.0F;
       axang4 = 0.0F;
-    } else {
-      
+    }
+    else
+    {
+
       axang4 = sqrtf(1.0F - temp_1 * temp_1);
       axang1 = (((w * x_d - w_d * x) + y * z_d) - y_d * z) / axang4;
       axang2 = (((w * y_d - w_d * y) - x * z_d) + x_d * z) / axang4;
       axang3 = (((w * z_d - w_d * z) + x * y_d) - x_d * y) / axang4;
       axang4 = 2.0F * acosf(temp_1);
     }
-    
-    if (axang4 > 3.1415926535897931f) {
+
+    if (axang4 > 3.1415926535897931f)
+    {
       axang4 = 6.28318548F - axang4;
       axang1 = -axang1;
       axang2 = -axang2;
       axang3 = -axang3;
     }
-    else if  (axang4 < -3.1415926535897931f)
+    else if (axang4 < -3.1415926535897931f)
     {
       axang4 += 6.28318548F + axang4;
       axang1 = -axang1;
       axang2 = -axang2;
       axang3 = -axang3;
     }
-    
+
     rot1 = axang1 * axang4;
     axang1 = axang2 * axang4;
     temp_1 = axang3 * axang4;
-    
+
     axang4 = (rot1 * x + axang1 * y) + temp_1 * z;
     axang2 = (rot1 * w - temp_1 * y) + axang1 * z;
     axang3 = (axang1 * w + temp_1 * x) - rot1 * z;
     temp_1 = (temp_1 * w - axang1 * x) + rot1 * y;
-    
+
     *tau_x = ((w * axang2 - y * temp_1) + x * axang4) + z * axang3;
     *tau_y = ((w * axang3 + x * temp_1) + y * axang4) - z * axang2;
     *tau_z = ((w * temp_1 - x * axang3) + y * axang2) + z * axang4;
@@ -541,11 +547,13 @@ static void stabilizerTask(void *param)
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
       // disable P controller when thrust is equal to attitude_control_limit
-      if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f){
+      if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
+      {
         kp_xy_temp = 0.0f;
         kp_z_temp = 0.0f;
       }
-      else{
+      else
+      {
         kp_xy_temp = kp_xy;
         kp_z_temp = kp_z;
       }
@@ -592,9 +600,9 @@ static void stabilizerTask(void *param)
         omega_y = omega_y * 57.2957795130823f * external_loop_freq;
         omega_z = omega_z * 57.2957795130823f * external_loop_freq;
 
-        omega_x = lim_num(omega_x, 2000);
-        omega_y = lim_num(omega_y, 2000);
-        omega_z = lim_num(omega_z, 2000);
+        omega_x = lim_num(omega_x, 300);
+        omega_y = lim_num(omega_y, 300);
+        omega_z = lim_num(omega_z, 300);
       }
 
       if (setpoint.thrust >= 10.0f)
@@ -624,7 +632,6 @@ static void stabilizerTask(void *param)
         //   omega_y = 0.0f;
         //   omega_z = 0.0f;
         // }
-
 
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
@@ -754,7 +761,6 @@ PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
 PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
 PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
-
 
 PARAM_GROUP_STOP(stabilizer)
 

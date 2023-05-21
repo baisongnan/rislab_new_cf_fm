@@ -109,20 +109,29 @@ bool powerDistributionTest(void)
 //   // Not implemented yet
 // }
 
-void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
-{
-  // int16_t r = control->roll / 2.0f;
-  // int16_t p = control->pitch / 2.0f;
 
-  // motorThrustUncapped->motors.m1 = control->thrust - r + p + control->yaw;
-  // motorThrustUncapped->motors.m2 = control->thrust - r - p - control->yaw;
-  // motorThrustUncapped->motors.m3 = control->thrust + r - p + control->yaw;
-  // motorThrustUncapped->motors.m4 = control->thrust + r + p - control->yaw;
+void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
+{ 
+  // // for regular x-config quadcopter
+  // int32_t att[4];
+  // att[0] = - control->roll + control->pitch + control->yaw;
+  // att[1] = - control->roll - control->pitch - control->yaw;
+  // att[2] = + control->roll - control->pitch + control->yaw;
+  // att[3] = + control->roll + control->pitch - control->yaw;
+
+  // for regular x-config quadcopter (inverse)
   int32_t att[4];
-  att[0] = - control->roll + control->pitch + control->yaw;
-  att[1] = - control->roll - control->pitch - control->yaw;
-  att[2] = + control->roll - control->pitch + control->yaw;
-  att[3] = + control->roll + control->pitch - control->yaw;
+  att[0] = + control->roll - control->pitch + control->yaw;
+  att[1] = + control->roll + control->pitch - control->yaw;
+  att[2] = - control->roll + control->pitch + control->yaw;
+  att[3] = - control->roll - control->pitch - control->yaw;
+
+  // // for regular +-config quadcopter
+  // int32_t att[4];
+  // att[0] =                 + control->pitch + control->yaw;
+  // att[1] = - control->roll                  - control->yaw;
+  // att[2] =                 - control->pitch + control->yaw;
+  // att[3] = + control->roll                  - control->yaw;
 
   int32_t min = att[0];
   for (int mi = 1; mi < 4; mi++)
@@ -144,22 +153,9 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motor
   motorThrustUncapped->motors.m3 = limitUint16(thrust + att[2]);
   motorThrustUncapped->motors.m4 = limitUint16(thrust + att[3]);
 
-  // powerDistributionLegacy(control, motorThrustUncapped);
-  // switch (control->controlMode) {
-  //   case controlModeLegacy:
-  //     powerDistributionLegacy(control, motorThrustUncapped);
-  //     break;
-  //   // case controlModeForceTorque:
-  //   //   powerDistributionForceTorque(control, motorThrustUncapped);
-  //   //   break;
-  //   // case controlModeForce:
-  //   //   powerDistributionForce(control, motorThrustUncapped);
-  //   //   break;
-  //   default:
-  //     // Nothing here
-  //     break;
-  // }
 }
+
+
 
 void powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUncapped, motors_thrust_pwm_t* motorPwm)
 {
