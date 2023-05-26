@@ -35,9 +35,9 @@
 #include "math.h"
 
 #ifndef CONFIG_MOTORS_DEFAULT_IDLE_THRUST
-#  define DEFAULT_IDLE_THRUST 0
+#define DEFAULT_IDLE_THRUST 0
 #else
-#  define DEFAULT_IDLE_THRUST CONFIG_MOTORS_DEFAULT_IDLE_THRUST
+#define DEFAULT_IDLE_THRUST CONFIG_MOTORS_DEFAULT_IDLE_THRUST
 #endif
 
 static uint32_t idleThrust = DEFAULT_IDLE_THRUST;
@@ -47,7 +47,7 @@ static float thrustToTorque = 0.005964552f;
 // thrust = a * pwm^2 + b * pwm
 static float pwmToThrustA = 0.091492681f;
 static float pwmToThrustB = 0.067673604f;
-static uint16_t min_thrust = 1500;
+static uint16_t min_thrust = 3000;
 
 int powerDistributionMotorType(uint32_t id)
 {
@@ -109,55 +109,138 @@ bool powerDistributionTest(void)
 //   // Not implemented yet
 // }
 
+void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motorThrustUncapped)
+{
+  // 8 propeller robot thrust compensation
+  int32_t att[8];
+  att[0] = +control->roll - control->pitch + control->yaw;
+  att[1] = +control->roll + control->pitch - control->yaw;
+  att[2] = -control->roll + control->pitch + control->yaw;
+  att[3] = -control->roll - control->pitch - control->yaw;
 
-void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
-{ 
-  // // for regular x-config quadcopter
-  // int32_t att[4];
-  // att[0] = - control->roll + control->pitch + control->yaw;
-  // att[1] = - control->roll - control->pitch - control->yaw;
-  // att[2] = + control->roll - control->pitch + control->yaw;
-  // att[3] = + control->roll + control->pitch - control->yaw;
+  int32_t roll2 = (int32_t)(1.4142f * (float)(control->roll));
+  int32_t pitch2 = (int32_t)(1.4142f * (float)(control->pitch));
+  att[4] = + pitch2 + control->yaw;
+  att[5] = - roll2 - control->yaw;
+  att[6] = - pitch2 + control->yaw;
+  att[7] = + roll2 - control->yaw;
 
-  // for regular x-config quadcopter (inverse)
-  int32_t att[4];
-  att[0] = + control->roll - control->pitch + control->yaw;
-  att[1] = + control->roll + control->pitch - control->yaw;
-  att[2] = - control->roll + control->pitch + control->yaw;
-  att[3] = - control->roll - control->pitch - control->yaw;
-
-  // // for regular +-config quadcopter
-  // int32_t att[4];
-  // att[0] =                 + control->pitch + control->yaw;
-  // att[1] = - control->roll                  - control->yaw;
-  // att[2] =                 - control->pitch + control->yaw;
-  // att[3] = + control->roll                  - control->yaw;
-
+  // for x-config quadcopter
   int32_t min = att[0];
   for (int mi = 1; mi < 4; mi++)
   {
     if (att[mi] < min)
-        min = att[mi];
+      min = att[mi];
   }
-  uint32_t thrust;
-  if (control->thrust < - min)
-    thrust = - min;
+  int32_t thrust;
+  if (control->thrust < -min)
+    thrust = -min;
   else
     thrust = (uint32_t)control->thrust;
-  
+
   if (thrust > 100)
     thrust = thrust + min_thrust;
 
-  motorThrustUncapped->motors.m1 = limitUint16(thrust + att[0]);
-  motorThrustUncapped->motors.m2 = limitUint16(thrust + att[1]);
-  motorThrustUncapped->motors.m3 = limitUint16(thrust + att[2]);
-  motorThrustUncapped->motors.m4 = limitUint16(thrust + att[3]);
+  att[0] = att[0] + thrust;
+  att[1] = att[1] + thrust;
+  att[2] = att[2] + thrust;
+  att[3] = att[3] + thrust;
 
+  // for +-config quadcopter
+  min = att[4];
+  for (int mi = 5; mi < 8; mi++)
+  {
+    if (att[mi] < min)
+      min = att[mi];
+  }
+  if (control->thrust < -min)
+    thrust = -min;
+  else
+    thrust = (uint32_t)control->thrust;
+
+  if (thrust > 100)
+    thrust = thrust + min_thrust;
+
+  att[4] = att[4] + thrust;
+  att[5] = att[5] + thrust;
+  att[6] = att[6] + thrust;
+  att[7] = att[7] + thrust;
+
+  // this is the thrust difference between the two robots
+  thrust = att[0] + att[1] + att[2] + att[3] - att[4] - att[5] - att[6] - att[7];
+
+  // mapping for x-config quadcopter
+  if (thrust < 0){
+    thrust = - thrust / 4.0f;
+    att[0] = att[0] + thrust;
+    att[1] = att[1] + thrust;
+    att[2] = att[2] + thrust;
+    att[3] = att[3] + thrust;
+  }
+  motorThrustUncapped->motors.m1 = limitUint16(att[0]);
+  motorThrustUncapped->motors.m2 = limitUint16(att[1]);
+  motorThrustUncapped->motors.m3 = limitUint16(att[2]);
+  motorThrustUncapped->motors.m4 = limitUint16(att[3]);
+
+  // // mapping for +-config quadcopter
+  // if (thrust > 0){
+  //   thrust = thrust / 4.0f;
+  //   att[4] = att[4] + thrust;
+  //   att[5] = att[5] + thrust;
+  //   att[6] = att[6] + thrust;
+  //   att[7] = att[7] + thrust;
+  // }
+  // motorThrustUncapped->motors.m1 = limitUint16(att[4]);
+  // motorThrustUncapped->motors.m2 = limitUint16(att[5]);
+  // motorThrustUncapped->motors.m3 = limitUint16(att[6]);
+  // motorThrustUncapped->motors.m4 = limitUint16(att[7]);
 }
 
+// void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motorThrustUncapped)
+// {
+//   // // for regular x-config quadcopter
+//   // int32_t att[4];
+//   // att[0] = - control->roll + control->pitch + control->yaw;
+//   // att[1] = - control->roll - control->pitch - control->yaw;
+//   // att[2] = + control->roll - control->pitch + control->yaw;
+//   // att[3] = + control->roll + control->pitch - control->yaw;
 
+//   // for regular x-config quadcopter (inverse)
+//   int32_t att[4];
+//   att[0] = +control->roll - control->pitch + control->yaw;
+//   att[1] = +control->roll + control->pitch - control->yaw;
+//   att[2] = -control->roll + control->pitch + control->yaw;
+//   att[3] = -control->roll - control->pitch - control->yaw;
 
-void powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUncapped, motors_thrust_pwm_t* motorPwm)
+//   // // for regular +-config quadcopter
+//   // int32_t att[4];
+//   // att[0] =                 + control->pitch + control->yaw;
+//   // att[1] = - control->roll                  - control->yaw;
+//   // att[2] =                 - control->pitch + control->yaw;
+//   // att[3] = + control->roll                  - control->yaw;
+
+//   int32_t min = att[0];
+//   for (int mi = 1; mi < 4; mi++)
+//   {
+//     if (att[mi] < min)
+//       min = att[mi];
+//   }
+//   uint32_t thrust;
+//   if (control->thrust < -min)
+//     thrust = -min;
+//   else
+//     thrust = (uint32_t)control->thrust;
+
+//   if (thrust > 100)
+//     thrust = thrust + min_thrust;
+
+//   motorThrustUncapped->motors.m1 = limitUint16(thrust + att[0]);
+//   motorThrustUncapped->motors.m2 = limitUint16(thrust + att[1]);
+//   motorThrustUncapped->motors.m3 = limitUint16(thrust + att[2]);
+//   motorThrustUncapped->motors.m4 = limitUint16(thrust + att[3]);
+// }
+
+void powerDistributionCap(const motors_thrust_uncapped_t *motorThrustBatCompUncapped, motors_thrust_pwm_t *motorPwm)
 {
   // const int32_t maxAllowedThrust = UINT16_MAX;
   for (int motorIndex = 0; motorIndex < STABILIZER_NR_OF_MOTORS; motorIndex++)
