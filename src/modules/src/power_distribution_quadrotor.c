@@ -48,6 +48,7 @@ static float thrustToTorque = 0.005964552f;
 static float pwmToThrustA = 0.091492681f;
 static float pwmToThrustB = 0.067673604f;
 static uint16_t min_thrust = 3000;
+static uint8_t down_thrust_cf = 1;
 
 int powerDistributionMotorType(uint32_t id)
 {
@@ -120,10 +121,10 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motor
 
   int32_t roll2 = (int32_t)(1.4142f * (float)(control->roll));
   int32_t pitch2 = (int32_t)(1.4142f * (float)(control->pitch));
-  att[4] = + pitch2 + control->yaw;
-  att[5] = - roll2 - control->yaw;
-  att[6] = - pitch2 + control->yaw;
-  att[7] = + roll2 - control->yaw;
+  att[4] = +pitch2 + control->yaw;
+  att[5] = -roll2 - control->yaw;
+  att[6] = -pitch2 + control->yaw;
+  att[7] = +roll2 - control->yaw;
 
   // for x-config quadcopter
   int32_t min = att[0];
@@ -168,32 +169,38 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motor
 
   // this is the thrust difference between the two robots
   thrust = att[0] + att[1] + att[2] + att[3] - att[4] - att[5] - att[6] - att[7];
-
-  // mapping for x-config quadcopter
-  if (thrust < 0){
-    thrust = - thrust / 4.0f;
-    att[0] = att[0] + thrust;
-    att[1] = att[1] + thrust;
-    att[2] = att[2] + thrust;
-    att[3] = att[3] + thrust;
+  if (down_thrust_cf)
+  {
+    // mapping for x-config quadcopter
+    if (thrust < 0)
+    {
+      thrust = -thrust / 4.0f;
+      att[0] = att[0] + thrust;
+      att[1] = att[1] + thrust;
+      att[2] = att[2] + thrust;
+      att[3] = att[3] + thrust;
+    }
+    motorThrustUncapped->motors.m1 = limitUint16(att[0]);
+    motorThrustUncapped->motors.m2 = limitUint16(att[1]);
+    motorThrustUncapped->motors.m3 = limitUint16(att[2]);
+    motorThrustUncapped->motors.m4 = limitUint16(att[3]);
   }
-  motorThrustUncapped->motors.m1 = limitUint16(att[0]);
-  motorThrustUncapped->motors.m2 = limitUint16(att[1]);
-  motorThrustUncapped->motors.m3 = limitUint16(att[2]);
-  motorThrustUncapped->motors.m4 = limitUint16(att[3]);
-
-  // // mapping for +-config quadcopter
-  // if (thrust > 0){
-  //   thrust = thrust / 4.0f;
-  //   att[4] = att[4] + thrust;
-  //   att[5] = att[5] + thrust;
-  //   att[6] = att[6] + thrust;
-  //   att[7] = att[7] + thrust;
-  // }
-  // motorThrustUncapped->motors.m1 = limitUint16(att[4]);
-  // motorThrustUncapped->motors.m2 = limitUint16(att[5]);
-  // motorThrustUncapped->motors.m3 = limitUint16(att[6]);
-  // motorThrustUncapped->motors.m4 = limitUint16(att[7]);
+  else
+  {
+    // mapping for +-config quadcopter
+    if (thrust > 0)
+    {
+      thrust = thrust / 4.0f;
+      att[4] = att[4] + thrust;
+      att[5] = att[5] + thrust;
+      att[6] = att[6] + thrust;
+      att[7] = att[7] + thrust;
+    }
+    motorThrustUncapped->motors.m1 = limitUint16(att[4]);
+    motorThrustUncapped->motors.m2 = limitUint16(att[5]);
+    motorThrustUncapped->motors.m3 = limitUint16(att[6]);
+    motorThrustUncapped->motors.m4 = limitUint16(att[7]);
+  }
 }
 
 // void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motorThrustUncapped)
@@ -283,6 +290,7 @@ PARAM_GROUP_START(powerDist)
  */
 PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, idleThrust, &idleThrust)
 PARAM_ADD_CORE(PARAM_UINT16, mt, &min_thrust)
+PARAM_ADD_CORE(PARAM_UINT8, dtcf, &down_thrust_cf)
 PARAM_GROUP_STOP(powerDist)
 
 /**

@@ -70,6 +70,7 @@ static state_t state;
 static control_t control;
 
 static float attitude_control_limit;
+static float idle_thrust;
 bool thrust_flag;
 
 static motors_thrust_uncapped_t motorThrustUncapped;
@@ -502,6 +503,8 @@ static void stabilizerTask(void *param)
 
   DEBUG_PRINT("Ready to fly.\n");
 
+  idle_thrust = 1500.0f;
+
   attitude_control_limit = 1300.0f;
   thrust_flag = true;
 
@@ -604,8 +607,14 @@ static void stabilizerTask(void *param)
         omega_y = lim_num(omega_y, 300);
         omega_z = lim_num(omega_z, 300);
       }
-
-      if (setpoint.thrust >= 10.0f)
+      if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
+      {
+        control.thrust = 3000.0f;
+        control.roll = 0.0f;
+        control.pitch = 0.0f;
+        control.yaw = 0.0f;
+      }
+      else if (setpoint.thrust >= 10.0f)
       {
 
         pcontrol(state.attitudeQuaternion.w,
