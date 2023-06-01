@@ -89,11 +89,15 @@ static float kp_xy_temp = 6000;
 static float kp_z = 6000;
 static float kp_z_temp = 6000;
 
-static float angle_error_threshold = 1.57f;
-static float angle_error_velocity = 300.0f;
+// static float angle_error_threshold = 1.57f;
+// static float angle_error_velocity = 300.0f;
 
 static float kd_xy = 10;
 static float kd_z = 10;
+
+static float tau_x_offset = 0.0f;
+static float tau_y_offset = 0.0f;
+static float tau_z_offset = 0.0f;
 
 static float tau_x = 0.0f;
 static float tau_y = 0.0f;
@@ -642,6 +646,10 @@ static void stabilizerTask(void *param)
         //   omega_z = 0.0f;
         // }
 
+        tau_x = tau_x + tau_x_offset;
+        tau_y = tau_y + tau_y_offset;
+        tau_z = tau_z + tau_z_offset;
+
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
         control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + (omega_y - sensorData.gyro.y) * kd_xy);
@@ -768,8 +776,12 @@ PARAM_ADD(PARAM_FLOAT, kdxy, &kd_xy)
 PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
 PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
-PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
-PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
+// PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
+// PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
+
+PARAM_ADD(PARAM_FLOAT, qxo, &tau_x_offset)
+PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
+PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_GROUP_STOP(stabilizer)
 
