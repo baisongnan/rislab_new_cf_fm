@@ -204,7 +204,10 @@ static void extPoseHandler(const CRTPPacket* pk) {
   // estimatorEnqueuePose(&ext_pose);
 
   // send these data to sensfusion6
-  setquat(data->qw, data->qx, data->qy, data->qz);
+  if (fabsf(ext_pose.x) <0.001f)
+    setquat(data->qw, data->qx, data->qy, data->qz); // directly update a correct attitude 
+  else if (fabsf(ext_pose.x - 1.0f) <0.001f)
+    applyquat(data->qw, data->qx, data->qy, data->qz); // apply the attitude correction matrix to current attitude
   tickOfLastPacket = xTaskGetTickCount();
 }
 
