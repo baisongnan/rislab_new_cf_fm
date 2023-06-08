@@ -122,9 +122,9 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motor
   int32_t roll2 = (int32_t)(1.4142f * (float)(control->roll));
   int32_t pitch2 = (int32_t)(1.4142f * (float)(control->pitch));
   att[4] = +pitch2 + control->yaw;
-  att[5] = -roll2 - control->yaw;
+  att[5] = -(-roll2) - control->yaw;
   att[6] = -pitch2 + control->yaw;
-  att[7] = +roll2 - control->yaw;
+  att[7] = -(+roll2) - control->yaw;
 
   // for x-config quadcopter
   int32_t min = att[0];

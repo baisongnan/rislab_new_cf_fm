@@ -613,7 +613,7 @@ static void stabilizerTask(void *param)
       }
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
-        control.thrust = 3000.0f;
+        control.thrust = 500.0f;
         control.roll = 0.0f;
         control.pitch = 0.0f;
         control.yaw = 0.0f;
