@@ -74,10 +74,10 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motor
 {
   // 8 propeller robot thrust compensation
   int32_t att[4];
-  att[0] = +control->roll - control->pitch + control->yaw;
-  att[1] = +control->roll + control->pitch - control->yaw;
-  att[2] = -control->roll + control->pitch + control->yaw;
-  att[3] = -control->roll - control->pitch - control->yaw;
+  att[0] = -control->roll + control->pitch + control->yaw;
+  att[1] = -control->roll - control->pitch - control->yaw;
+  att[2] = +control->roll - control->pitch + control->yaw;
+  att[3] = +control->roll + control->pitch - control->yaw;
 
   // for x-config quadcopter
   int32_t min = att[0];
