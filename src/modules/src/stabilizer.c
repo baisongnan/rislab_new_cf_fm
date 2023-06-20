@@ -526,31 +526,9 @@ static void stabilizerTask(void *param)
     }
     else
     {
-      // allow to update estimator dynamically
-      // if (stateEstimatorGetType() != estimatorType)
-      // {
-      //   stateEstimatorSwitchTo(estimatorType);
-      //   estimatorType = stateEstimatorGetType();
-      // }
-      // // allow to update controller dynamically
-      // if (controllerGetType() != controllerType)
-      // {
-      //   controllerInit(controllerType);
-      //   controllerType = controllerGetType();
-      // }
-
       stateEstimator(&state, tick);
       compressState();
-
-      // if (crtpCommanderHighLevelGetSetpoint(&tempSetpoint, &state, tick)) {
-      //   commanderSetSetpoint(&tempSetpoint, COMMANDER_PRIORITY_HIGHLEVEL);
-      // }
-
       commanderGetSetpoint(&setpoint, &state);
-      // compressSetpoint();
-
-      // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
-
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
       // disable P controller when thrust is equal to attitude_control_limit
@@ -611,6 +589,7 @@ static void stabilizerTask(void *param)
         omega_y = lim_num(omega_y, 300);
         omega_z = lim_num(omega_z, 300);
       }
+      
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
         control.thrust = 500.0f;
@@ -663,38 +642,6 @@ static void stabilizerTask(void *param)
         control.yaw = 0.0f;
       }
 
-      // checkEmergencyStopTimeout();
-
-      //
-      // The supervisor module keeps track of Crazyflie state such as if
-      // we are ok to fly, or if the Crazyflie is in flight.
-      //
-      // supervisorUpdate(&sensorData);
-
-      // if (setpoint.thrust < attitude_control_limit) // disable the attitude controller when the desired thrust is close to zero
-      // {
-      //   thrust_flag = false;
-      //   control.thrust = 0.0f;
-      // }
-      // else
-      // {
-      //   if (thrust_flag)
-      //   {
-      //     ;
-      //   }
-      //   else
-      //   {
-      //     if (stateCompressed.az > 2000)
-      //     {
-      //       thrust_flag = true;
-      //     }
-      //     else
-      //     {
-      //       control.thrust = 0.0f;
-      //     }
-      //   }
-      // }
-
       if (emergencyStop || (systemIsArmed() == false))
       {
         motorsStop();
@@ -707,14 +654,6 @@ static void stabilizerTask(void *param)
         setMotorRatios(&motorPwm);
       }
 
-      // #ifdef CONFIG_DECK_USD
-      //       // Log data to uSD card if configured
-      //       if (usddeckLoggingEnabled()
-      //           && usddeckLoggingMode() == usddeckLoggingMode_SynchronousStabilizer
-      //           && RATE_DO_EXECUTE(usddeckFrequency(), tick)) {
-      //         usddeckTriggerLogging();
-      //       }
-      // #endif
       calcSensorToOutputLatency(&sensorData);
       tick++;
       STATS_CNT_RATE_EVENT(&stabilizerRate);
@@ -733,20 +672,6 @@ static void stabilizerTask(void *param)
 #endif
   }
 }
-
-// void stabilizerSetEmergencyStop()
-// {
-//   emergencyStop = true;
-// }
-// void stabilizerResetEmergencyStop()
-// {
-//   emergencyStop = false;
-// }
-// void stabilizerSetEmergencyStopTimeout(int timeout)
-// {
-//   emergencyStop = false;
-//   emergencyStopTimeout = timeout;
-// }
 
 /**
  * Parameters to set the estimator and controller type
