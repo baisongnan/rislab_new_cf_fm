@@ -71,6 +71,9 @@ static control_t control;
 
 static float attitude_control_limit;
 static float idle_thrust;
+static float autorotate_thrust;
+static float autorotate_thrust_2;
+
 bool thrust_flag;
 
 static motors_thrust_uncapped_t motorThrustUncapped;
@@ -508,6 +511,8 @@ static void stabilizerTask(void *param)
   DEBUG_PRINT("Ready to fly.\n");
 
   idle_thrust = 1500.0f;
+  autorotate_thrust = 1550.0f;
+  autorotate_thrust_2 = 1580.0f;
 
   attitude_control_limit = 1300.0f;
   thrust_flag = true;
@@ -650,10 +655,27 @@ static void stabilizerTask(void *param)
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
 
-        control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
-        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + (omega_y - sensorData.gyro.y) * kd_xy);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
+        if (fabsf(autorotate_thrust - setpoint.thrust) < 2.0f)
+        {
+          control.thrust = setpoint.attitude.roll*100.0f;
+          control.roll = 0.0f;
+          control.pitch = 0.0f;
+          control.yaw = 0.0f;
+        }
+        // else if (fabsf(autorotate_thrust_2 - setpoint.thrust) < 2.0f)
+        // {
+        //   control.thrust = setpoint.thrust;
+        //   control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
+        //   control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + (omega_y - sensorData.gyro.y) * kd_xy);
+        //   control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
+        // }
+        else
+        {
+          control.thrust = setpoint.thrust;
+          control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
+          control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + (omega_y - sensorData.gyro.y) * kd_xy);
+          control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
+        }
       }
       else
       {
