@@ -589,13 +589,18 @@ static void stabilizerTask(void *param)
         qz_desired_delay = qz_desired;
 
         // compute desired quat
-        eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
-                    setpoint.attitude.pitch * -0.0174532925199433f,
-                    setpoint.attitude.roll * 0.0174532925199433f,
-                    &qw_desired,
-                    &qx_desired,
-                    &qy_desired,
-                    &qz_desired);
+        if (fabsf(autorotate_thrust - setpoint.thrust) < 2.0f)
+          ;
+        else
+        {
+          eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
+                      setpoint.attitude.pitch * -0.0174532925199433f,
+                      setpoint.attitude.roll * 0.0174532925199433f,
+                      &qw_desired,
+                      &qx_desired,
+                      &qy_desired,
+                      &qz_desired);
+        }
 
         pcontrol(qw_desired_delay,
                  qx_desired_delay,
@@ -657,7 +662,7 @@ static void stabilizerTask(void *param)
 
         if (fabsf(autorotate_thrust - setpoint.thrust) < 2.0f)
         {
-          control.thrust = setpoint.attitude.roll*100.0f;
+          control.thrust = setpoint.attitude.roll * 100.0f;
           control.roll = 0.0f;
           control.pitch = 0.0f;
           control.yaw = 0.0f;
