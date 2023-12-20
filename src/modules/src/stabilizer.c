@@ -95,6 +95,9 @@ static float kp_z_temp = 6000;
 // static float angle_error_threshold = 1.57f;
 // static float angle_error_velocity = 300.0f;
 
+static float kd_roll_autorotate = 50;
+static float kd_pitch_autorotate = 120;
+
 static float kd_xy = 10;
 static float kd_z = 10;
 
@@ -512,7 +515,7 @@ static void stabilizerTask(void *param)
 
   idle_thrust = 1500.0f;
   autorotate_thrust = 1550.0f;
-  autorotate_thrust_2 = 1580.0f;
+  autorotate_thrust_2 = 1560.0f;
 
   attitude_control_limit = 1300.0f;
   thrust_flag = true;
@@ -667,13 +670,13 @@ static void stabilizerTask(void *param)
           control.pitch = 0.0f;
           control.yaw = 0.0f;
         }
-        // else if (fabsf(autorotate_thrust_2 - setpoint.thrust) < 2.0f)
-        // {
-        //   control.thrust = setpoint.thrust;
-        //   control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
-        //   control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + (omega_y - sensorData.gyro.y) * kd_xy);
-        //   control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
-        // }
+        else if (fabsf(autorotate_thrust_2 - setpoint.thrust) < 2.0f)
+        {
+          control.thrust = setpoint.attitude.roll * 100.0f;
+          control.roll = 0.0f;
+          control.pitch = -(int16_t)limint16((0 - sensorData.gyro.y) * kd_pitch_autorotate);
+          control.yaw = 0.0f;
+        }
         else
         {
           control.thrust = setpoint.thrust;
@@ -804,7 +807,8 @@ PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
 PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
 // PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
-// PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
+PARAM_ADD(PARAM_FLOAT, kdar, &kd_roll_autorotate)
+PARAM_ADD(PARAM_FLOAT, kdap, &kd_pitch_autorotate)
 
 PARAM_ADD(PARAM_FLOAT, qxo, &tau_x_offset)
 PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
