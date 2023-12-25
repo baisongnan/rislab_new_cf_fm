@@ -69,6 +69,8 @@ static sensorData_t sensorData;
 static state_t state;
 static control_t control;
 
+static uint8_t regular_control_mode;
+
 static motors_thrust_uncapped_t motorThrustUncapped;
 static motors_thrust_uncapped_t motorThrustBatCompUncapped;
 static motors_thrust_pwm_t motorPwm;
@@ -260,6 +262,8 @@ static void stabilizerTask(void* param)
 
   DEBUG_PRINT("Ready to fly.\n");
 
+  regular_control_mode = 1;
+
   while(1) {
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
@@ -293,7 +297,17 @@ static void stabilizerTask(void* param)
 
       collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
-      controller(&control, &setpoint, &sensorData, &state, tick);
+      if (regular_control_mode)
+      {
+        controller(&control, &setpoint, &sensorData, &state, tick);
+      }
+      else{
+        // revolving
+        control.thrust = setpoint.thrust;
+        control.roll = setpoint.attitude.roll;
+        control.pitch = setpoint.attitude.pitch;
+        control.yaw = setpoint.attitudeRate.yaw;
+      }
 
       checkEmergencyStopTimeout();
 
@@ -339,7 +353,7 @@ static void stabilizerTask(void* param)
 
 void stabilizerSetEmergencyStop()
 {
-  emergencyStop = true;
+  emergencyStop = false;
 }
 
 void stabilizerResetEmergencyStop()
@@ -368,6 +382,8 @@ PARAM_ADD_CORE(PARAM_UINT8, estimator, &estimatorType)
  * @brief Controller type Auto select(0), PID(1), Mellinger(2), INDI(3), Brescianini(4) (Default: 0)
  */
 PARAM_ADD_CORE(PARAM_UINT8, controller, &controllerType)
+
+PARAM_ADD_CORE(PARAM_UINT8, rcm, &regular_control_mode)
 /**
  * @brief If set to nonzero will turn off power
  */
