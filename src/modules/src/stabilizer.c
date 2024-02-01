@@ -89,6 +89,8 @@ static float kp_xy_temp = 6000;
 static float kp_z = 6000;
 static float kp_z_temp = 6000;
 
+static float norm_tau_omega_limit = 100.0f;
+
 // static float angle_error_threshold = 1.57f;
 // static float angle_error_velocity = 300.0f;
 
@@ -512,6 +514,10 @@ static void stabilizerTask(void *param)
   attitude_control_limit = 1300.0f;
   thrust_flag = true;
 
+  float tau_omega_x = 0.0f;
+  float tau_omega_y = 0.0f;
+  float norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
+
   while (1)
   {
     // The sensor should unlock at 1kHz
@@ -629,10 +635,20 @@ static void stabilizerTask(void *param)
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
 
+        tau_omega_x = omega_x - sensorData.gyro.x;
+        tau_omega_y = omega_x - sensorData.gyro.y;
+        norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
+
+        if (norm_tau_omega > norm_tau_omega_limit)
+        {
+          tau_omega_x = tau_omega_x / norm_tau_omega * norm_tau_omega_limit;
+          tau_omega_y = tau_omega_y / norm_tau_omega * norm_tau_omega_limit;
+        }
+
         control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + (omega_x - sensorData.gyro.x) * kd_xy);
-        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + (omega_y - sensorData.gyro.y) * kd_xy);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
+        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
+        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
+        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_x - sensorData.gyro.z) * kd_z);
       }
       else
       {
@@ -707,6 +723,8 @@ PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 PARAM_ADD(PARAM_FLOAT, qxo, &tau_x_offset)
 PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
 PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
+
+PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 
 PARAM_GROUP_STOP(stabilizer)
 
