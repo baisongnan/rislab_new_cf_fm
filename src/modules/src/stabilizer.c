@@ -57,6 +57,12 @@
 #include "static_mem.h"
 #include "rateSupervisor.h"
 
+#include "uart2.h"
+
+static int16_t FOC_target = 0; // unit: 0.01 rad
+static uint8_t FOC_angle_P = 0;
+static uint8_t FOC_control_mode = 2;
+
 static bool isInit;
 static bool emergencyStop = false;
 // static int emergencyStopTimeout = EMERGENCY_STOP_TIMEOUT_DISABLED;
@@ -124,6 +130,61 @@ uint32_t timestamp_setpoint = 0;
 static float external_loop_freq = 100.0f;
 // static uint32_t time_gap_setpoint = 10000;
 
+static char data2uart[10] = "T10\r\n";
+
+void FOC_send_target(int16_t target)
+{
+  *data2uart = 'T';
+  char *h = itoa(target, data2uart + 1, 10);
+  while (*h != '\0')
+    h++;
+  *h = '\r'; h++; *h = '\n';
+  uart2SendData((h - data2uart + 1), data2uart);
+}
+
+void FOC_send_target_callback()
+{
+  FOC_send_target(FOC_target);
+}
+
+void FOC_send_angle_P_callback()
+{
+  char *temp = data2uart;
+  *temp = 'M';
+  temp ++;
+  *temp = 'A';
+  temp ++;
+  *temp = 'P';
+  char *h = itoa(FOC_angle_P, temp + 1, 10);
+  while (*h != '\0')
+    h++;
+  *h = '\r'; h++; *h = '\n';
+  uart2SendData((h - temp + 3), data2uart);
+}
+
+void FOC_set_control_mode(uint8_t FOCM)
+{
+  // 0 - torque
+  // 1 - velocity
+  // 2 - angle
+  // 3 - velocity_openloop
+  // 4 - angle_openloop
+  char *temp = data2uart;
+  *temp = 'M';
+  temp ++;
+  *temp = 'C';
+  char *h = itoa(FOCM, temp + 1, 10);
+  while (*h != '\0')
+    h++;
+  *h = '\r'; h++; *h = '\n';
+  uart2SendData((h - temp + 2), data2uart);
+}
+
+void FOC_control_mode_callback()
+{
+  FOC_set_control_mode(FOC_control_mode);
+}
+
 float limint16(float in)
 {
   if (in > 32000.0f)
@@ -153,86 +214,9 @@ bool same_attitude(float w, float x, float y, float z, float w_d, float x_d, flo
   return fabsf(dot_product) > 0.999999f;
 }
 
-// void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
-//               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
-// {
-//   if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
-//   {
-//     *tau_x = 0.0F;
-//     *tau_y = 0.0F;
-//     *tau_z = 0.0F;
-//   }
-//   else
-//   {
-//     float b_temp2_tmp;
-//     float temp2_tmp;
-//     float wwd;
-//     float x2;
-//     float xd2;
-//     float xxd;
-//     float y2;
-//     float yd2;
-//     float yyd;
-//     float z2;
-//     float zd2;
-//     float zzd;
-//     wwd = w * w_d;
-//     xxd = x * x_d;
-//     yyd = y * y_d;
-//     zzd = z * z_d;
-//     x2 = x * x;
-//     y2 = y * y;
-//     z2 = z * z;
-//     xd2 = x_d * x_d;
-//     yd2 = y_d * y_d;
-//     zd2 = z_d * z_d;
-//     temp2_tmp = 2.0F * xxd;
-//     b_temp2_tmp = 2.0F * wwd;
-//     x2 = (((((((((((((((((((-2.0F * x2 * xd2 - x2 * yd2) - x2 * zd2) + x2) -
-//                          temp2_tmp * yyd) -
-//                         temp2_tmp * zzd) -
-//                        b_temp2_tmp * xxd) -
-//                       xd2 * y2) -
-//                      xd2 * z2) +
-//                     xd2) -
-//                    2.0F * y2 * yd2) -
-//                   y2 * zd2) +
-//                  y2) -
-//                 2.0F * yyd * zzd) -
-//                b_temp2_tmp * yyd) -
-//               yd2 * z2) +
-//              yd2) -
-//             2.0F * z2 * zd2) +
-//            z2) -
-//           b_temp2_tmp * zzd) +
-//          zd2;
-//     if (x2 <= 0.0F)
-//     {
-//       *tau_x = 0.0F;
-//       *tau_y = 0.0F;
-//       *tau_z = 0.0F;
-//     }
-//     else
-//     {
-//       x2 = 2.0F * acosf(((wwd + xxd) + yyd) + zzd) / sqrtf(x2);
-//       *tau_x = x2 * (((w * x_d - w_d * x) - y * z_d) + y_d * z);
-//       *tau_y = x2 * (((w * y_d - w_d * y) + x * z_d) - x_d * z);
-//       *tau_z = x2 * (((w * z_d - w_d * z) - x * y_d) + x_d * y);
-//     }
-//   }
-// }
-
 void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
 {
-
-  // if (w*w_d<0.0f)
-  // {
-  //   w_d = -w_d;
-  //   x_d = -x_d;
-  //   y_d = -y_d;
-  //   z_d = -z_d;
-  // }
 
   if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
   {
@@ -320,21 +304,6 @@ static struct
   int16_t ratePitch;
   int16_t rateYaw;
 } stateCompressed;
-
-// static struct {
-//   // position - mm
-//   int16_t x;
-//   int16_t y;
-//   int16_t z;
-//   // velocity - mm / sec
-//   int16_t vx;
-//   int16_t vy;
-//   int16_t vz;
-//   // acceleration - mm / sec^2
-//   int16_t ax;
-//   int16_t ay;
-//   int16_t az;
-// } setpointCompressed;
 
 STATIC_MEM_TASK_ALLOC(stabilizerTask, STABILIZER_TASK_STACKSIZE);
 
@@ -518,6 +487,11 @@ static void stabilizerTask(void *param)
   float tau_omega_y = 0.0f;
   float norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
 
+  uart2Init(115200);
+  if (uart2Test())
+    DEBUG_PRINT("UART2 ready.\n");
+  
+
   while (1)
   {
     // The sensor should unlock at 1kHz
@@ -595,7 +569,7 @@ static void stabilizerTask(void *param)
         omega_y = lim_num(omega_y, 300);
         omega_z = lim_num(omega_z, 300);
       }
-      
+
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
         control.thrust = 500.0f;
@@ -615,21 +589,6 @@ static void stabilizerTask(void *param)
                  qy_desired,
                  qz_desired,
                  &tau_x, &tau_y, &tau_z);
-
-        // float angle_error = sqrtf(tau_x * tau_x + tau_y * tau_y + tau_z * tau_z);
-
-        // if (angle_error > angle_error_threshold)
-        // {
-        //   omega_x = (tau_x/angle_error) * angle_error_velocity;
-        //   omega_y = (tau_y/angle_error) * angle_error_velocity;
-        //   omega_z = (tau_z/angle_error) * angle_error_velocity;
-        // }
-        // else
-        // {
-        //   omega_x = 0.0f;
-        //   omega_y = 0.0f;
-        //   omega_z = 0.0f;
-        // }
 
         tau_x = tau_x + tau_x_offset;
         tau_y = tau_y + tau_y_offset;
@@ -725,6 +684,11 @@ PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
 PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
+
+PARAM_ADD_WITH_CALLBACK(PARAM_INT16, foctg, &FOC_target, &FOC_send_target_callback)
+PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focap, &FOC_angle_P, &FOC_send_angle_P_callback)
+PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focm, &FOC_control_mode, &FOC_control_mode_callback)
+
 
 PARAM_GROUP_STOP(stabilizer)
 
