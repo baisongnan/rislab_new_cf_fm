@@ -61,7 +61,7 @@
 
 static int16_t FOC_target = 0; // unit: 0.01 rad
 static uint8_t FOC_angle_P = 0;
-static uint8_t FOC_control_mode = 2;
+static uint8_t FOC_control_mode = 0;
 
 static bool isInit;
 static bool emergencyStop = false;

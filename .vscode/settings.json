@@ -8,6 +8,7 @@
         "*.m": "matlab",
         "bootloader.h": "c",
         "compare": "c",
-        "complex": "c"
+        "complex": "c",
+        "quatcompress.h": "c"
     }
 }
