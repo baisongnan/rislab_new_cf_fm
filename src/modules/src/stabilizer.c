@@ -60,7 +60,7 @@
 #include "uart2.h"
 
 static int16_t FOC_target = 0; // unit: 0.01 rad
-static uint8_t FOC_angle_P = 0;
+// static uint8_t FOC_angle_P = 0;
 static uint8_t FOC_control_mode = 0;
 
 static bool isInit;
@@ -90,8 +90,12 @@ static STATS_CNT_RATE_DEFINE(stabilizerRate, 500);
 static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
 
-static float kp_xy = 6000;
-static float kp_xy_temp = 6000;
+
+static float kp_x = 6000;
+static float kp_x_temp = 6000;
+static float kp_y = 6000;
+static float kp_y_temp = 6000;
+
 static float kp_z = 6000;
 static float kp_z_temp = 6000;
 
@@ -100,7 +104,8 @@ static float norm_tau_omega_limit = 100.0f;
 // static float angle_error_threshold = 1.57f;
 // static float angle_error_velocity = 300.0f;
 
-static float kd_xy = 10;
+static float kd_x = 10;
+static float kd_y = 10;
 static float kd_z = 10;
 
 static float tau_x_offset = 0.0f;
@@ -132,9 +137,9 @@ static float external_loop_freq = 100.0f;
 
 static char data2uart[10] = "T10\r\n";
 
-void FOC_send_target(int16_t target)
+void FOC_send_torque_target(int16_t target)
 {
-  *data2uart = 'T';
+  *data2uart = 'Q';
   char *h = itoa(target, data2uart + 1, 10);
   while (*h != '\0')
     h++;
@@ -142,48 +147,81 @@ void FOC_send_target(int16_t target)
   uart2SendData((h - data2uart + 1), data2uart);
 }
 
-void FOC_send_target_callback()
+void FOC_send_torque_target_callback()
 {
-  FOC_send_target(FOC_target);
+  FOC_send_torque_target(FOC_target);
 }
 
-void FOC_send_angle_P_callback()
+void FOC_send_angle_target(int16_t target)
 {
-  char *temp = data2uart;
-  *temp = 'M';
-  temp ++;
-  *temp = 'A';
-  temp ++;
-  *temp = 'P';
-  char *h = itoa(FOC_angle_P, temp + 1, 10);
+  *data2uart = 'A';
+  char *h = itoa(target, data2uart + 1, 10);
   while (*h != '\0')
     h++;
   *h = '\r'; h++; *h = '\n';
-  uart2SendData((h - temp + 3), data2uart);
+  uart2SendData((h - data2uart + 1), data2uart);
 }
 
-void FOC_set_control_mode(uint8_t FOCM)
+void FOC_send_angle_target_callback()
 {
-  // 0 - torque
-  // 1 - velocity
-  // 2 - angle
-  // 3 - velocity_openloop
-  // 4 - angle_openloop
-  char *temp = data2uart;
-  *temp = 'M';
-  temp ++;
-  *temp = 'C';
-  char *h = itoa(FOCM, temp + 1, 10);
-  while (*h != '\0')
-    h++;
-  *h = '\r'; h++; *h = '\n';
-  uart2SendData((h - temp + 2), data2uart);
+  FOC_send_angle_target(FOC_target);
+  FOC_control_mode = 2;
 }
 
-void FOC_control_mode_callback()
-{
-  FOC_set_control_mode(FOC_control_mode);
-}
+// void FOC_send_target(int16_t target)
+// {
+//   *data2uart = 'T';
+//   char *h = itoa(target, data2uart + 1, 10);
+//   while (*h != '\0')
+//     h++;
+//   *h = '\r'; h++; *h = '\n';
+//   uart2SendData((h - data2uart + 1), data2uart);
+// }
+
+// void FOC_send_target_callback()
+// {
+//   FOC_send_target(FOC_target);
+// }
+
+// void FOC_send_angle_P_callback()
+// {
+//   char *temp = data2uart;
+//   *temp = 'M';
+//   temp ++;
+//   *temp = 'A';
+//   temp ++;
+//   *temp = 'P';
+//   char *h = itoa(FOC_angle_P, temp + 1, 10);
+//   while (*h != '\0')
+//     h++;
+//   *h = '\r'; h++; *h = '\n';
+//   uart2SendData((h - temp + 3), data2uart);
+// }
+
+// void FOC_set_control_mode(uint8_t FOCM)
+// {
+//   // 0 - torque
+//   // 1 - velocity
+//   // 2 - angle
+//   // 3 - velocity_openloop
+//   // 4 - angle_openloop
+//   char *temp = data2uart;
+//   *temp = 'M';
+//   temp ++;
+//   *temp = 'C';
+//   char *h = itoa(FOCM, temp + 1, 10);
+//   while (*h != '\0')
+//     h++;
+//   *h = '\r'; h++; *h = '\n';
+//   uart2SendData((h - temp + 2), data2uart);
+// }
+
+// void FOC_control_mode_callback()
+// {
+//   FOC_set_control_mode(FOC_control_mode);
+// }
+
+
 
 float limint16(float in)
 {
@@ -514,13 +552,18 @@ static void stabilizerTask(void *param)
       // disable P controller when thrust is equal to attitude_control_limit
       if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
       {
-        kp_xy_temp = 0.0f;
+        
         kp_z_temp = 0.0f;
+        kp_x_temp = 0.0f;
+        kp_y_temp = 0.0f;
+        
       }
       else
       {
-        kp_xy_temp = kp_xy;
+        
         kp_z_temp = kp_z;
+        kp_x_temp = kp_x;
+        kp_y_temp = kp_y;
       }
 
       if (timestamp_setpoint == setpoint.timestamp)
@@ -605,8 +648,8 @@ static void stabilizerTask(void *param)
         }
 
         control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
-        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
+        control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
+        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_x - sensorData.gyro.z) * kd_z);
       }
       else
@@ -670,9 +713,13 @@ PARAM_ADD_CORE(PARAM_UINT8, stop, &emergencyStop)
 
 PARAM_ADD(PARAM_FLOAT, acl, &attitude_control_limit)
 
-PARAM_ADD(PARAM_FLOAT, kpxy, &kp_xy)
+
+PARAM_ADD(PARAM_FLOAT, kpx, &kp_x)
+PARAM_ADD(PARAM_FLOAT, kpy, &kp_y)
 PARAM_ADD(PARAM_FLOAT, kpz, &kp_z)
-PARAM_ADD(PARAM_FLOAT, kdxy, &kd_xy)
+
+PARAM_ADD(PARAM_FLOAT, kdx, &kd_x)
+PARAM_ADD(PARAM_FLOAT, kdy, &kd_y)
 PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
 PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
@@ -685,9 +732,9 @@ PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 
-PARAM_ADD_WITH_CALLBACK(PARAM_INT16, foctg, &FOC_target, &FOC_send_target_callback)
-PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focap, &FOC_angle_P, &FOC_send_angle_P_callback)
-PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focm, &FOC_control_mode, &FOC_control_mode_callback)
+PARAM_ADD_WITH_CALLBACK(PARAM_INT16, foctg, &FOC_target, &FOC_send_angle_target_callback)
+// PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focap, &FOC_angle_P, &FOC_send_angle_P_callback)
+PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focm, &FOC_control_mode, &FOC_send_torque_target_callback)
 
 
 PARAM_GROUP_STOP(stabilizer)
