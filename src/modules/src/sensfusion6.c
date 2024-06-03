@@ -89,6 +89,10 @@ static float gravX, gravY, gravZ; // Unit vector in the estimated gravity direct
 static float baseZacc = 1.0;
 static uint8_t gravity_correction = 1;
 
+bool get_gravity_correction(){
+  return gravity_correction;
+}
+
 static bool isInit;
 
 static bool isCalibrated = false;

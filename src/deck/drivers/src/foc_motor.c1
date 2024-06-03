@@ -1,0 +1,139 @@
+
+#define DEBUG_MODULE "FOC"
+
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include "stm32fxxx.h"
+#include "config.h"
+#include "console.h"
+#include "debug.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "log.h"
+#include "param.h"
+#include "system.h"
+#include "queue.h"
+#include "deck.h"
+#include "uart2.h"
+
+#define PACKET_SIZE 9
+
+static bool isInit = false;
+static TaskHandle_t xHandle = NULL;
+
+static int16_t FOC_target = 0; // unit: 0.01 rad
+static uint8_t FOC_control_mode = 0;
+
+static char data2uart[10] = "T10\r\n";
+
+void FOC_send_torque_target(int16_t target)
+{
+  *data2uart = 'Q';
+  char *h = itoa(target, data2uart + 1, 10);
+  while (*h != '\0')
+    h++;
+  *h = '\r'; h++; *h = '\n';
+  uart2SendData((h - data2uart + 1), data2uart);
+}
+
+void FOC_send_torque_target_callback()
+{
+  FOC_send_torque_target(FOC_target);
+}
+
+void FOC_send_angle_target(int16_t target)
+{
+  *data2uart = 'A';
+  char *h = itoa(target, data2uart + 1, 10);
+  while (*h != '\0')
+    h++;
+  *h = '\r'; h++; *h = '\n';
+  uart2SendData((h - data2uart + 1), data2uart);
+}
+
+void FOC_send_angle_target_callback()
+{
+  FOC_send_angle_target(FOC_target);
+  FOC_control_mode = 2;
+}
+
+// void FOC_send_angle_P_callback()
+// {
+//   char *temp = data2uart;
+//   *temp = 'M';
+//   temp ++;
+//   *temp = 'A';
+//   temp ++;
+//   *temp = 'P';
+//   char *h = itoa(FOC_angle_P, temp + 1, 10);
+//   while (*h != '\0')
+//     h++;
+//   *h = '\r'; h++; *h = '\n';
+//   uart2SendData((h - temp + 3), data2uart);
+// }
+
+
+void tofTask(void *param)
+{
+    const uint32_t baudrate = 115200;
+   
+
+    uart2Init(baudrate);
+    if (uart2Test())
+        DEBUG_PRINT("UART2 ready.\n");
+    systemWaitStart();
+
+    // while (1)
+    // {
+    //     ;
+    // }
+}
+
+static void tofInit(DeckInfo *info)
+{
+    if (isInit)
+        return;
+
+    DEBUG_PRINT("Initialize.\n");
+
+    xTaskCreate(tofTask, "FOC_TASK",
+                configMINIMAL_STACK_SIZE, NULL, 1, &xHandle);
+
+    isInit = true;
+}
+
+static bool tofTest()
+{
+    if (!isInit)
+        return false;
+
+    DEBUG_PRINT("Test passed.\n");
+
+    return true;
+}
+
+static const DeckDriver foc_motor = {
+    .vid = 0,
+    .pid = 0,
+    .name = "foc_motor",
+    .usedGpio = 0,
+    .usedPeriph = DECK_USING_UART2,
+    .init = tofInit,
+    .test = tofTest,
+};
+
+DECK_DRIVER(foc_motor);
+
+// LOG_GROUP_START(foc_motor)
+// LOG_ADD(LOG_UINT16, distance, &tof_distance)
+// LOG_ADD(LOG_FLOAT, frequency, &tof_frequency)
+// LOG_GROUP_STOP(foc_motor)
+
+PARAM_GROUP_START(foc_motor)
+PARAM_ADD_WITH_CALLBACK(PARAM_INT16, tg, &FOC_target, &FOC_send_angle_target_callback)
+PARAM_ADD_WITH_CALLBACK(PARAM_INT8, mode, &FOC_control_mode, &FOC_send_torque_target_callback)
+PARAM_GROUP_STOP(foc_motor)
+

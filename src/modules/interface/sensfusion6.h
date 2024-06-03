@@ -38,4 +38,8 @@ void sensfusion6GetQuaternion(float* qx, float* qy, float* qz, float* qw);
 void sensfusion6GetEulerRPY(float* roll, float* pitch, float* yaw);
 float sensfusion6GetAccZWithoutGravity(const float ax, const float ay, const float az);
 
+bool get_gravity_correction();
+
+// static uint8_t gravity_correction = 1;
+
 #endif /* SENSORFUSION6_H_ */

@@ -9,6 +9,16 @@
         "bootloader.h": "c",
         "compare": "c",
         "complex": "c",
-        "quatcompress.h": "c"
+        "quatcompress.h": "c",
+        "power_distribution.h": "c",
+        "stdio.h": "c",
+        "*.c_raw": "c",
+        "uart2.h": "c",
+        "ratio": "c",
+        "crtp_commander_high_level.h": "c",
+        "tofsensor.h": "c",
+        "crtp_localization_service.h": "c",
+        "sensfusion6.h": "c",
+        "stdbool.h": "c"
     }
 }

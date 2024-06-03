@@ -25,6 +25,8 @@
  */
 #define DEBUG_MODULE "STAB"
 
+// #define RATE_CONTROL
+
 #include <math.h>
 
 #include "FreeRTOS.h"
@@ -56,18 +58,16 @@
 #include "statsCnt.h"
 #include "static_mem.h"
 #include "rateSupervisor.h"
-
-#include "uart2.h"
-
-static int16_t FOC_target = 0; // unit: 0.01 rad
-// static uint8_t FOC_angle_P = 0;
-static uint8_t FOC_control_mode = 0;
+#include "tofsensor.h"
+#include "sensfusion6.h"
 
 static bool isInit;
 static bool emergencyStop = false;
 // static int emergencyStopTimeout = EMERGENCY_STOP_TIMEOUT_DISABLED;
 
 static uint32_t inToOutLatency;
+
+static float Kvq = 0;
 
 // State variables for the stabilizer
 static setpoint_t setpoint;
@@ -89,7 +89,6 @@ static ControllerType controllerType;
 static STATS_CNT_RATE_DEFINE(stabilizerRate, 500);
 static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
-
 
 static float kp_x = 6000;
 static float kp_x_temp = 6000;
@@ -115,112 +114,43 @@ static float tau_z_offset = 0.0f;
 static float tau_x = 0.0f;
 static float tau_y = 0.0f;
 static float tau_z = 0.0f;
-
+#ifdef RATE_CONTROL
 static float omega_x = 0.0f;
 static float omega_y = 0.0f;
 static float omega_z = 0.0f;
-
+#endif
 static float qw_desired = 1.0f;
 static float qx_desired = 0.0f;
 static float qy_desired = 0.0f;
 static float qz_desired = 0.0f;
 
+#ifdef RATE_CONTROL
 static float qw_desired_delay = 1.0f;
 static float qx_desired_delay = 0.0f;
 static float qy_desired_delay = 0.0f;
 static float qz_desired_delay = 0.0f;
-
+#endif
 uint32_t timestamp_setpoint = 0;
 
-static float external_loop_freq = 100.0f;
+static float external_loop_freq = 0.0f;
 // static uint32_t time_gap_setpoint = 10000;
 
-static char data2uart[10] = "T10\r\n";
+float acc_z_delay = 0;
+static uint8_t JST = 1;
 
-void FOC_send_torque_target(int16_t target)
+// 定义联合体，包含一个 float 和两个 __fp16
+static uint8_t enable_pitch_compress = false;
+union
 {
-  *data2uart = 'Q';
-  char *h = itoa(target, data2uart + 1, 10);
-  while (*h != '\0')
-    h++;
-  *h = '\r'; h++; *h = '\n';
-  uart2SendData((h - data2uart + 1), data2uart);
-}
-
-void FOC_send_torque_target_callback()
-{
-  FOC_send_torque_target(FOC_target);
-}
-
-void FOC_send_angle_target(int16_t target)
-{
-  *data2uart = 'A';
-  char *h = itoa(target, data2uart + 1, 10);
-  while (*h != '\0')
-    h++;
-  *h = '\r'; h++; *h = '\n';
-  uart2SendData((h - data2uart + 1), data2uart);
-}
-
-void FOC_send_angle_target_callback()
-{
-  FOC_send_angle_target(FOC_target);
-  FOC_control_mode = 2;
-}
-
-// void FOC_send_target(int16_t target)
-// {
-//   *data2uart = 'T';
-//   char *h = itoa(target, data2uart + 1, 10);
-//   while (*h != '\0')
-//     h++;
-//   *h = '\r'; h++; *h = '\n';
-//   uart2SendData((h - data2uart + 1), data2uart);
-// }
-
-// void FOC_send_target_callback()
-// {
-//   FOC_send_target(FOC_target);
-// }
-
-// void FOC_send_angle_P_callback()
-// {
-//   char *temp = data2uart;
-//   *temp = 'M';
-//   temp ++;
-//   *temp = 'A';
-//   temp ++;
-//   *temp = 'P';
-//   char *h = itoa(FOC_angle_P, temp + 1, 10);
-//   while (*h != '\0')
-//     h++;
-//   *h = '\r'; h++; *h = '\n';
-//   uart2SendData((h - temp + 3), data2uart);
-// }
-
-// void FOC_set_control_mode(uint8_t FOCM)
-// {
-//   // 0 - torque
-//   // 1 - velocity
-//   // 2 - angle
-//   // 3 - velocity_openloop
-//   // 4 - angle_openloop
-//   char *temp = data2uart;
-//   *temp = 'M';
-//   temp ++;
-//   *temp = 'C';
-//   char *h = itoa(FOCM, temp + 1, 10);
-//   while (*h != '\0')
-//     h++;
-//   *h = '\r'; h++; *h = '\n';
-//   uart2SendData((h - temp + 2), data2uart);
-// }
-
-// void FOC_control_mode_callback()
-// {
-//   FOC_set_control_mode(FOC_control_mode);
-// }
-
+  float buffer;
+  struct
+  {
+    __fp16 leg_angle;
+    __fp16 pitch_angle;
+  } halves;
+} FloatWithTwoHalfPrecision;
+float leg_angle = 0;
+static uint8_t leg_auto_control = false;
 
 
 float limint16(float in)
@@ -525,11 +455,6 @@ static void stabilizerTask(void *param)
   float tau_omega_y = 0.0f;
   float norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
 
-  uart2Init(115200);
-  if (uart2Test())
-    DEBUG_PRINT("UART2 ready.\n");
-  
-
   while (1)
   {
     // The sensor should unlock at 1kHz
@@ -547,20 +472,56 @@ static void stabilizerTask(void *param)
       stateEstimator(&state, tick);
       compressState();
       commanderGetSetpoint(&setpoint, &state);
+      if (enable_pitch_compress)
+      {
+        FloatWithTwoHalfPrecision.buffer = setpoint.attitude.pitch;
+        setpoint.attitude.pitch = (float)FloatWithTwoHalfPrecision.halves.pitch_angle;
+        leg_angle = -(float)FloatWithTwoHalfPrecision.halves.leg_angle;
+      }
+
       // controller(&control, &setpoint, &sensorData, &state, tick);
+
+      // this run in jumping mode only
+      if (!get_gravity_correction())
+      {
+        // hopping state detection 
+        if (sensorData.acc.z > 2.0f && acc_z_delay <= 2.0f)
+        {
+          // landing
+          JST = 2;
+          // FOC_send_torque_target(0);
+        }
+        else if (sensorData.acc.z < 2.0f && acc_z_delay >= 2.0f)
+        {
+          // takeoff
+          JST = 1;
+          // FOC_send_angle_target(leg_angle*17.4532777778f);
+        }
+
+        // FOC motor setpoint
+        if (tick % 10 == 5 && leg_auto_control)
+        {
+          if (sensorData.acc.z > 2.0f)
+          {
+            // FOC_send_torque_target(0);
+            ;
+          }
+          else
+          {
+            FOC_send_angle_target(leg_angle*17.4532777778f);
+          }
+        }
+      }
 
       // disable P controller when thrust is equal to attitude_control_limit
       if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
       {
-        
         kp_z_temp = 0.0f;
         kp_x_temp = 0.0f;
         kp_y_temp = 0.0f;
-        
       }
       else
       {
-        
         kp_z_temp = kp_z;
         kp_x_temp = kp_x;
         kp_y_temp = kp_y;
@@ -573,17 +534,18 @@ static void stabilizerTask(void *param)
       }
       else
       {
+        ;
         // control input is received
         if (setpoint.timestamp > timestamp_setpoint)
           // time_gap_setpoint = setpoint.timestamp - timestamp_setpoint;
 
           timestamp_setpoint = setpoint.timestamp;
-
+#ifdef RATE_CONTROL
         qw_desired_delay = qw_desired;
         qx_desired_delay = qx_desired;
         qy_desired_delay = qy_desired;
         qz_desired_delay = qz_desired;
-
+#endif
         // compute desired quat
         eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
                     setpoint.attitude.pitch * -0.0174532925199433f,
@@ -592,7 +554,7 @@ static void stabilizerTask(void *param)
                     &qx_desired,
                     &qy_desired,
                     &qz_desired);
-
+#ifdef RATE_CONTROL
         pcontrol(qw_desired_delay,
                  qx_desired_delay,
                  qy_desired_delay,
@@ -602,15 +564,14 @@ static void stabilizerTask(void *param)
                  qy_desired,
                  qz_desired,
                  &omega_x, &omega_y, &omega_z);
-
         // // desired angular rate in degrees
         omega_x = omega_x * 57.2957795130823f * external_loop_freq;
         omega_y = omega_y * 57.2957795130823f * external_loop_freq;
         omega_z = omega_z * 57.2957795130823f * external_loop_freq;
-
         omega_x = lim_num(omega_x, 300);
         omega_y = lim_num(omega_y, 300);
         omega_z = lim_num(omega_z, 300);
+#endif
       }
 
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
@@ -636,9 +597,13 @@ static void stabilizerTask(void *param)
         tau_x = tau_x + tau_x_offset;
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
-
+#ifdef RATE_CONTROL
         tau_omega_x = omega_x - sensorData.gyro.x;
-        tau_omega_y = omega_x - sensorData.gyro.y;
+        tau_omega_y = omega_y - sensorData.gyro.y;
+#else
+        tau_omega_x = -sensorData.gyro.x;
+        tau_omega_y = -sensorData.gyro.y;
+#endif
         norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
 
         if (norm_tau_omega > norm_tau_omega_limit)
@@ -646,11 +611,17 @@ static void stabilizerTask(void *param)
           tau_omega_x = tau_omega_x / norm_tau_omega * norm_tau_omega_limit;
           tau_omega_y = tau_omega_y / norm_tau_omega * norm_tau_omega_limit;
         }
-
+#ifdef RATE_CONTROL
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
-        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_x - sensorData.gyro.z) * kd_z);
+        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq * get_vq());
+        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
+#else
+        control.thrust = setpoint.thrust;
+        control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
+        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq * get_vq());
+        control.yaw = -(int16_t)limint16(tau_z * kp_z + (-sensorData.gyro.z) * kd_z);
+#endif
       }
       else
       {
@@ -713,7 +684,6 @@ PARAM_ADD_CORE(PARAM_UINT8, stop, &emergencyStop)
 
 PARAM_ADD(PARAM_FLOAT, acl, &attitude_control_limit)
 
-
 PARAM_ADD(PARAM_FLOAT, kpx, &kp_x)
 PARAM_ADD(PARAM_FLOAT, kpy, &kp_y)
 PARAM_ADD(PARAM_FLOAT, kpz, &kp_z)
@@ -721,6 +691,7 @@ PARAM_ADD(PARAM_FLOAT, kpz, &kp_z)
 PARAM_ADD(PARAM_FLOAT, kdx, &kd_x)
 PARAM_ADD(PARAM_FLOAT, kdy, &kd_y)
 PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
+PARAM_ADD(PARAM_FLOAT, kvq, &Kvq)
 PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
 // PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
@@ -731,12 +702,8 @@ PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
 PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
-
-PARAM_ADD_WITH_CALLBACK(PARAM_INT16, foctg, &FOC_target, &FOC_send_angle_target_callback)
-// PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focap, &FOC_angle_P, &FOC_send_angle_P_callback)
-PARAM_ADD_WITH_CALLBACK(PARAM_INT8, focm, &FOC_control_mode, &FOC_send_torque_target_callback)
-
-
+PARAM_ADD(PARAM_UINT8, pcomp, &enable_pitch_compress)
+PARAM_ADD(PARAM_UINT8, lac, &leg_auto_control)
 PARAM_GROUP_STOP(stabilizer)
 
 /**
@@ -896,6 +863,10 @@ STATS_CNT_RATE_LOG_ADD(rtStab, &stabilizerRate)
  *    Note: Used for debugging but could also be used as a system test
  */
 LOG_ADD(LOG_UINT32, intToOut, &inToOutLatency)
+
+LOG_ADD(LOG_UINT8, jst, &JST)
+LOG_ADD(LOG_FLOAT, la, &leg_angle)
+
 LOG_GROUP_STOP(stabilizer)
 
 /**
@@ -1015,6 +986,7 @@ LOG_GROUP_STOP(mag)
 
 LOG_GROUP_START(controller)
 LOG_ADD(LOG_INT16, ctr_yaw, &control.yaw)
+LOG_ADD(LOG_INT16, ctr_pit, &control.pitch)
 LOG_GROUP_STOP(controller)
 
 /**
