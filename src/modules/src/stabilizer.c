@@ -489,13 +489,13 @@ static void stabilizerTask(void *param)
         {
           // landing
           JST = 2;
-          // FOC_send_torque_target(0);
+          FOC_send_torque_target(0);
         }
         else if (sensorData.acc.z < 2.0f && acc_z_delay >= 2.0f)
         {
           // takeoff
           JST = 1;
-          // FOC_send_angle_target(leg_angle*17.4532777778f);
+          FOC_send_angle_target(leg_angle*17.4532777778f);
         }
 
         // FOC motor setpoint
@@ -503,7 +503,7 @@ static void stabilizerTask(void *param)
         {
           if (sensorData.acc.z > 2.0f)
           {
-            // FOC_send_torque_target(0);
+            FOC_send_torque_target(0);
             ;
           }
           else
