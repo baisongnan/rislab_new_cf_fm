@@ -137,6 +137,7 @@ static float external_loop_freq = 0.0f;
 
 float acc_z_delay = 0;
 static uint8_t JST = 1;
+static uint8_t JST_motor_control = 0;
 
 // 定义联合体，包含一个 float 和两个 __fp16
 static uint8_t enable_pitch_compress = false;
@@ -151,7 +152,6 @@ union
 } FloatWithTwoHalfPrecision;
 float leg_angle = 0;
 static uint8_t leg_auto_control = false;
-
 
 float limint16(float in)
 {
@@ -484,18 +484,20 @@ static void stabilizerTask(void *param)
       // this run in jumping mode only
       if (!get_gravity_correction())
       {
-        // hopping state detection 
+        // hopping state detection
         if (sensorData.acc.z > 2.0f && acc_z_delay <= 2.0f)
         {
           // landing
           JST = 2;
-          FOC_send_torque_target(0);
+          if (JST_motor_control)
+            FOC_send_torque_target(0);
         }
         else if (sensorData.acc.z < 2.0f && acc_z_delay >= 2.0f)
         {
           // takeoff
           JST = 1;
-          FOC_send_angle_target(leg_angle*17.4532777778f);
+          if (JST_motor_control)
+            FOC_send_angle_target(leg_angle * 17.4532777778f);
         }
 
         // FOC motor setpoint
@@ -503,12 +505,12 @@ static void stabilizerTask(void *param)
         {
           if (sensorData.acc.z > 2.0f)
           {
-            FOC_send_torque_target(0);
-            ;
+            if (JST_motor_control)
+              FOC_send_torque_target(0);
           }
           else
           {
-            FOC_send_angle_target(leg_angle*17.4532777778f);
+            FOC_send_angle_target(leg_angle * 17.4532777778f);
           }
         }
       }
@@ -704,6 +706,8 @@ PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 PARAM_ADD(PARAM_UINT8, pcomp, &enable_pitch_compress)
 PARAM_ADD(PARAM_UINT8, lac, &leg_auto_control)
+PARAM_ADD(PARAM_UINT8, jstm, &JST_motor_control)
+
 PARAM_GROUP_STOP(stabilizer)
 
 /**
@@ -865,6 +869,7 @@ STATS_CNT_RATE_LOG_ADD(rtStab, &stabilizerRate)
 LOG_ADD(LOG_UINT32, intToOut, &inToOutLatency)
 
 LOG_ADD(LOG_UINT8, jst, &JST)
+
 LOG_ADD(LOG_FLOAT, la, &leg_angle)
 
 LOG_GROUP_STOP(stabilizer)
