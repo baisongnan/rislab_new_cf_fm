@@ -514,6 +514,8 @@ static void stabilizerTask(void *param)
           }
         }
       }
+      acc_z_delay = sensorData.acc.z;
+
 
       // disable P controller when thrust is equal to attitude_control_limit
       if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
