@@ -8,6 +8,7 @@
         "*.m": "matlab",
         "bootloader.h": "c",
         "compare": "c",
-        "complex": "c"
+        "complex": "c",
+        "crtp_commander_high_level.h": "c"
     }
 }

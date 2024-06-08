@@ -25,6 +25,8 @@
  */
 #define DEBUG_MODULE "STAB"
 
+#define FLIP_FCN
+
 #include <math.h>
 
 #include "FreeRTOS.h"
@@ -123,6 +125,13 @@ uint32_t timestamp_setpoint = 0;
 
 static float external_loop_freq = 100.0f;
 // static uint32_t time_gap_setpoint = 10000;
+
+#ifdef FLIP_FCN
+float flip_thrust;
+static int16_t flip_roll = 10000;
+float flip_thrust = 1380;
+float switch_angle = 130;
+#endif
 
 float limint16(float in)
 {
@@ -595,7 +604,7 @@ static void stabilizerTask(void *param)
         omega_y = lim_num(omega_y, 300);
         omega_z = lim_num(omega_z, 300);
       }
-      
+
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
         control.thrust = 500.0f;
@@ -649,6 +658,19 @@ static void stabilizerTask(void *param)
         control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
         control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_x - sensorData.gyro.z) * kd_z);
+#ifdef FLIP_FCN
+        if (fabsf(flip_thrust - setpoint.thrust) < 2.0f)
+        {
+          if (state.attitude.roll > -30 && state.attitude.roll < switch_angle)
+            control.roll = flip_roll;
+          else
+            control.roll = -flip_roll;
+
+          control.thrust = 1000.0f;
+          control.pitch = 0;
+          control.yaw = 0;
+        }
+#endif
       }
       else
       {
@@ -725,6 +747,13 @@ PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
 PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
+
+#ifdef FLIP_FCN
+PARAM_ADD(PARAM_INT16, fr, &flip_roll)
+PARAM_ADD(PARAM_FLOAT, sa, &switch_angle)
+
+
+#endif
 
 PARAM_GROUP_STOP(stabilizer)
 
