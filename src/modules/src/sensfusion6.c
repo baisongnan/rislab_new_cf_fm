@@ -73,11 +73,19 @@ void setquat(float w, float x, float y, float z)
   qz = z;
 }
 
-void applyquat(float w, float x, float y, float z)
+void applyquat(float w, float x, float y, float z) // Relta_R * R
 {
   quaternion_multiply(
       w, x, y, z,
       qw, qx, qy, qz,
+      &qw, &qx, &qy, &qz);
+}
+
+void applyquat_body(float w, float x, float y, float z) //  R * Relta_R
+{
+  quaternion_multiply(
+      qw, qx, qy, qz,
+      w, x, y, z,
       &qw, &qx, &qy, &qz);
 }
 

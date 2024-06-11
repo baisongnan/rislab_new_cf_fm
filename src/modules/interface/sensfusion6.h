@@ -29,9 +29,11 @@
 
 void setquat(float w, float x, float y, float z);
 void applyquat(float w, float x, float y, float z);
+void applyquat_body(float w, float x, float y, float z); 
 
 void sensfusion6Init(void);
 bool sensfusion6Test(void);
+
 
 void sensfusion6UpdateQ(float gx, float gy, float gz, float ax, float ay, float az, float dt);
 void sensfusion6GetQuaternion(float* qx, float* qy, float* qz, float* qw);

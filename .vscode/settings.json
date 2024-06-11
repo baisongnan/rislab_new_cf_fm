@@ -9,6 +9,7 @@
         "bootloader.h": "c",
         "compare": "c",
         "complex": "c",
-        "crtp_commander_high_level.h": "c"
+        "crtp_commander_high_level.h": "c",
+        "stdbool.h": "c"
     }
 }
