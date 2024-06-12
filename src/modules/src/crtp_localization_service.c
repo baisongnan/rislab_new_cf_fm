@@ -208,6 +208,8 @@ static void extPoseHandler(const CRTPPacket* pk) {
     setquat(data->qw, data->qx, data->qy, data->qz); // directly update a correct attitude 
   else if (fabsf(ext_pose.x - 1.0f) <0.001f)
     applyquat(data->qw, data->qx, data->qy, data->qz); // apply the attitude correction matrix to current attitude
+  else if (fabsf(ext_pose.x - 2.0f) <0.001f)
+    applyquat_body(data->qw, data->qx, data->qy, data->qz);
   tickOfLastPacket = xTaskGetTickCount();
 }
 

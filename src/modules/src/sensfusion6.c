@@ -81,6 +81,14 @@ void applyquat(float w, float x, float y, float z)
       &qw, &qx, &qy, &qz);
 }
 
+void applyquat_body(float w, float x, float y, float z)
+{
+  quaternion_multiply(
+      qw, qx, qy, qz,
+      w, x, y, z,
+      &qw, &qx, &qy, &qz);
+}
+
 static float gravX, gravY, gravZ; // Unit vector in the estimated gravity direction
 
 // The acc in Z for static position (g)
