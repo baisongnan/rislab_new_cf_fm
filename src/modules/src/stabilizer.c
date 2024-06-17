@@ -67,7 +67,9 @@ static bool emergencyStop = false;
 
 static uint32_t inToOutLatency;
 
-static float Kvq = 0;
+static float Kvq = 0.0f;
+static float Kvq_filter_gain = 0.1f;
+float Kvq_torque = 0.0f;
 
 // State variables for the stabilizer
 static setpoint_t setpoint;
@@ -135,7 +137,8 @@ uint32_t timestamp_setpoint = 0;
 static float external_loop_freq = 0.0f;
 // static uint32_t time_gap_setpoint = 10000;
 
-float acc_z_delay = 0;
+float acc_norm_delay = 0;
+float acc_norm = 0;
 static uint8_t JST = 1;
 static uint8_t JST_motor_control = 0;
 
@@ -484,15 +487,16 @@ static void stabilizerTask(void *param)
       // this run in jumping mode only
       if (!get_gravity_correction())
       {
+        acc_norm = (sensorData.acc.z * sensorData.acc.z + sensorData.acc.x * sensorData.acc.x);
         // hopping state detection
-        if (sensorData.acc.z > 2.0f && acc_z_delay <= 2.0f)
+        if (acc_norm > 4.0f && acc_norm_delay <= 4.0f)
         {
           // landing
           JST = 2;
           if (JST_motor_control)
             FOC_send_torque_target(0);
         }
-        else if (sensorData.acc.z < 2.0f && acc_z_delay >= 2.0f)
+        else if (acc_norm < 4.0f && acc_norm_delay >= 4.0f)
         {
           // takeoff
           JST = 1;
@@ -503,7 +507,7 @@ static void stabilizerTask(void *param)
         // FOC motor setpoint
         if (tick % 10 == 5 && leg_auto_control)
         {
-          if (sensorData.acc.z > 2.0f)
+          if (acc_norm > 4.0f)
           {
             if (JST_motor_control)
               FOC_send_torque_target(0);
@@ -514,7 +518,7 @@ static void stabilizerTask(void *param)
           }
         }
       }
-      acc_z_delay = sensorData.acc.z;
+      acc_norm_delay = acc_norm;
 
 
       // disable P controller when thrust is equal to attitude_control_limit
@@ -615,15 +619,17 @@ static void stabilizerTask(void *param)
           tau_omega_x = tau_omega_x / norm_tau_omega * norm_tau_omega_limit;
           tau_omega_y = tau_omega_y / norm_tau_omega * norm_tau_omega_limit;
         }
+
+        Kvq_torque = Kvq_torque * (1 - Kvq_filter_gain) + (Kvq * get_vq()) * Kvq_filter_gain;
 #ifdef RATE_CONTROL
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
-        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq * get_vq());
+        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq_torque);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
-#else
+#else   
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
-        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq * get_vq());
+        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq_torque);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (-sensorData.gyro.z) * kd_z);
 #endif
       }
@@ -633,6 +639,15 @@ static void stabilizerTask(void *param)
         control.roll = 0.0f;
         control.pitch = 0.0f;
         control.yaw = 0.0f;
+      }
+
+      if (JST_motor_control){
+        if (acc_norm > 4.0f){
+          control.thrust = 2000.0f;
+          control.roll = 0.0f;
+          control.pitch = 0.0f;
+          control.yaw = 0.0f;
+        }
       }
 
       if (emergencyStop || (systemIsArmed() == false))
@@ -696,6 +711,7 @@ PARAM_ADD(PARAM_FLOAT, kdx, &kd_x)
 PARAM_ADD(PARAM_FLOAT, kdy, &kd_y)
 PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
 PARAM_ADD(PARAM_FLOAT, kvq, &Kvq)
+PARAM_ADD(PARAM_FLOAT, kvqf, &Kvq_filter_gain)
 PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
 // PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)

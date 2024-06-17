@@ -51,6 +51,11 @@ static union
     float a;
     unsigned char bytes[4];
 } motor_velocity;
+// #define VEL_FILTER
+#ifdef VEL_FILTER
+static float motor_velocity_f = 0;
+static float motor_velocity_f_gain = 0.05;
+#endif
 
 static union
 {
@@ -164,6 +169,9 @@ void tofTask(void *param)
                 inToOutLatency = Timestamp - Timestamp_old;
             }
         }
+#ifdef VEL_FILTER
+        motor_velocity_f = motor_velocity_f * (1-motor_velocity_f_gain) + motor_velocity.a * motor_velocity_f_gain;
+#endif
     }
 }
 
@@ -205,12 +213,18 @@ DECK_DRIVER(foc_motor);
 PARAM_GROUP_START(foc_motor)
 PARAM_ADD_WITH_CALLBACK(PARAM_INT16, tg, &FOC_target, &FOC_send_angle_target_callback)
 PARAM_ADD_WITH_CALLBACK(PARAM_INT8, mode, &FOC_control_mode, &FOC_send_torque_target_callback)
+#ifdef VEL_FILTER
+PARAM_ADD(PARAM_FLOAT, mvfg, &motor_velocity_f_gain)
+#endif
 PARAM_GROUP_STOP(foc_motor)
 
 LOG_GROUP_START(foc_motorlog)
 LOG_ADD(LOG_UINT32, in2out, &inToOutLatency)
 LOG_ADD(LOG_FLOAT, angle, &motor_angle.a)
 LOG_ADD(LOG_FLOAT, vel, &motor_velocity.a)
+#ifdef VEL_FILTER
+LOG_ADD(LOG_FLOAT, velf, &motor_velocity_f)
+#endif
 LOG_ADD(LOG_FLOAT, v_q, &motor_voltage_q.a)
 LOG_ADD(LOG_FLOAT, tg, &FOC_target)
 LOG_GROUP_STOP(foc_motorlog)
