@@ -58,7 +58,7 @@
 #include "statsCnt.h"
 #include "static_mem.h"
 #include "rateSupervisor.h"
-#include "tofsensor.h"
+#include "focmotor.h"
 #include "sensfusion6.h"
 
 static bool isInit;

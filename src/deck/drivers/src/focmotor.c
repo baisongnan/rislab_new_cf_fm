@@ -20,7 +20,7 @@
 #include "queue.h"
 #include "deck.h"
 #include "uart2.h"
-#include "tofsensor.h"
+#include "focmotor.h"
 
 static bool isInit = false;
 static TaskHandle_t xHandle = NULL;
@@ -127,7 +127,7 @@ void tofTask(void *param)
     while (data_from_uart.bytes[0] != 'M' || data_from_uart.bytes[1] != 'R')
     {
         uart2GetData(4, data_from_uart.bytes);
-        vTaskDelay(M2T(10));
+        vTaskDelay(M2T(100));
     }
     motor_ready = true;
     DEBUG_PRINT("motor ready.\n");
@@ -201,7 +201,7 @@ static bool tofTest()
 static const DeckDriver foc_motor = {
     .vid = 0,
     .pid = 0,
-    .name = "tofsensor",
+    .name = "focmotor",
     .usedGpio = 0,
     .usedPeriph = DECK_USING_UART2,
     .init = tofInit,
