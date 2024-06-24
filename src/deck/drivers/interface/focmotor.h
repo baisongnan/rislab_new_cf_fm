@@ -1,3 +1,0 @@
-
-float get_vq();
-

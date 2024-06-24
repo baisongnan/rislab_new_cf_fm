@@ -58,7 +58,7 @@
 #include "statsCnt.h"
 #include "static_mem.h"
 #include "rateSupervisor.h"
-#include "focmotor.h"
+// #include "focmotor.h"
 #include "sensfusion6.h"
 
 static bool isInit;
@@ -606,7 +606,7 @@ static void stabilizerTask(void *param)
           tau_omega_y = tau_omega_y / norm_tau_omega * norm_tau_omega_limit;
         }
 
-        Kvq_torque = Kvq_torque * (1 - Kvq_filter_gain) + (Kvq * get_vq()) * Kvq_filter_gain;
+        Kvq_torque = Kvq_torque * (1 - Kvq_filter_gain) + (Kvq * 0) * Kvq_filter_gain;
 #ifdef RATE_CONTROL
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
