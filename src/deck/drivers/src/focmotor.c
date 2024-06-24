@@ -34,6 +34,8 @@ uint8_t motorQE[2];
 uint8_t motorTE[6];
 static uint8_t enable_foc_motor = 0;
 
+uint16_t tick = 0;
+
 static union
 {
     float a;
@@ -44,21 +46,17 @@ static union
 {
     float a;
     unsigned char bytes[4];
-} data_from_uart;
+} motor_angle_t;
 
 static union
 {
     float a;
     unsigned char bytes[4];
-} data_from_uart_2;
-
-static float motor_angle = 0.0f;
-static float motor_current = 0.0f;
-
+} motor_current_t;
 
 float get_vq()
 {
-    return motor_current;
+    return motor_current_t.a;
 }
 
 void send_foc_target(float tg)
@@ -72,10 +70,9 @@ void send_foc_target(float tg)
 }
 
 void disable_foc()
-{   
+{
     uart2SendData(2, motorQE);
 }
-
 
 void focTask(void *param)
 {
@@ -90,9 +87,9 @@ void focTask(void *param)
         DEBUG_PRINT("UART2 ready.\n");
 
     // check motor condition
-    while (data_from_uart.bytes[0] != 'M' || data_from_uart.bytes[1] != 'R')
+    while (motor_angle_t.bytes[0] != 'M' || motor_angle_t.bytes[1] != 'R')
     {
-        uart2GetData(4, data_from_uart.bytes);
+        uart2GetData(4, motor_angle_t.bytes);
         vTaskDelay(M2T(100));
     }
     motor_ready = true;
@@ -100,23 +97,21 @@ void focTask(void *param)
 
     // main loop
     while (1)
-    {
+    {   
+        
+        vTaskDelay(M2T(2));
+
         if (enable_foc_motor)
             send_foc_target(get_leg_angle());
         else
             disable_foc();
+        // vTaskDelay(M2T(1));
 
         uart2GetCharWithTimeout(&tempbuffer, M2T(100));
         if (tempbuffer == 'A')
-        {   
-            uart2GetDataWithTimeout(4, data_from_uart.bytes, M2T(100));
-            uart2GetDataWithTimeout(4, data_from_uart_2.bytes, M2T(100));
-            uart2GetCharWithTimeout(&tempbuffer, M2T(100));
-            if (tempbuffer == 'I')
-            {
-                motor_angle = data_from_uart.a;
-                motor_current = data_from_uart_2.a;
-            }
+        {
+            uart2GetDataWithTimeout(4, motor_angle_t.bytes, M2T(100));
+            uart2GetDataWithTimeout(4, motor_current_t.bytes, M2T(100));
         }
     }
 }
@@ -161,6 +156,6 @@ PARAM_ADD(PARAM_UINT8, efm, &enable_foc_motor)
 PARAM_GROUP_STOP(foc_motor)
 
 LOG_GROUP_START(foc_motorlog)
-LOG_ADD(LOG_FLOAT, angle, &motor_angle)
-LOG_ADD(LOG_FLOAT, curr, &motor_current)
+LOG_ADD(LOG_FLOAT, angle, &motor_angle_t.a)
+LOG_ADD(LOG_FLOAT, curr, &motor_current_t.a)
 LOG_GROUP_STOP(foc_motorlog)
