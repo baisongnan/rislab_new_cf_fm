@@ -30,7 +30,7 @@ const uint32_t baudrate = 115200;
 bool motor_ready = false;
 
 uint8_t tempbuffer;
-uint8_t motorQE[2];
+uint8_t motorQE[6];
 uint8_t motorTE[6];
 static uint8_t enable_foc_motor = 0;
 
@@ -71,13 +71,18 @@ void send_foc_target(float tg)
 
 void disable_foc()
 {
-    uart2SendData(2, motorQE);
+    uart2SendData(6, motorQE);
 }
 
 void focTask(void *param)
 {
     motorQE[0] = (uint8_t)'Q';
     motorQE[1] = (uint8_t)'E';
+    motorQE[2] = (uint8_t)'E';
+    motorQE[3] = (uint8_t)'E';
+    motorQE[4] = (uint8_t)'E';
+    motorQE[5] = (uint8_t)'E';
+
     motorTE[0] = (uint8_t)'T';
     motorTE[5] = (uint8_t)'E';
 
@@ -98,14 +103,12 @@ void focTask(void *param)
     // main loop
     while (1)
     {   
-        
         vTaskDelay(M2T(2));
 
         if (enable_foc_motor)
             send_foc_target(get_leg_angle());
         else
             disable_foc();
-        // vTaskDelay(M2T(1));
 
         uart2GetCharWithTimeout(&tempbuffer, M2T(100));
         if (tempbuffer == 'A')
