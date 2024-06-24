@@ -154,6 +154,11 @@ union
   } halves;
 } FloatWithTwoHalfPrecision;
 float leg_angle = 0;
+
+float get_leg_angle()
+{
+  return leg_angle;
+}
 static uint8_t leg_auto_control = false;
 
 float limint16(float in)
@@ -493,33 +498,14 @@ static void stabilizerTask(void *param)
         {
           // landing
           JST = 2;
-          if (JST_motor_control)
-            FOC_send_torque_target(0);
         }
         else if (acc_norm < 4.0f && acc_norm_delay >= 4.0f)
         {
           // takeoff
           JST = 1;
-          if (JST_motor_control)
-            FOC_send_angle_target(leg_angle * 17.4532777778f);
-        }
-
-        // FOC motor setpoint
-        if (tick % 10 == 5 && leg_auto_control)
-        {
-          if (acc_norm > 4.0f)
-          {
-            if (JST_motor_control)
-              FOC_send_torque_target(0);
-          }
-          else
-          {
-            FOC_send_angle_target(leg_angle * 17.4532777778f);
-          }
         }
       }
       acc_norm_delay = acc_norm;
-
 
       // disable P controller when thrust is equal to attitude_control_limit
       if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
@@ -626,7 +612,7 @@ static void stabilizerTask(void *param)
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
         control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq_torque);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
-#else   
+#else
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
         control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq_torque);
@@ -641,8 +627,10 @@ static void stabilizerTask(void *param)
         control.yaw = 0.0f;
       }
 
-      if (JST_motor_control){
-        if (acc_norm > 4.0f){
+      if (JST_motor_control)
+      {
+        if (acc_norm > 4.0f)
+        {
           control.thrust = 2000.0f;
           control.roll = 0.0f;
           control.pitch = 0.0f;

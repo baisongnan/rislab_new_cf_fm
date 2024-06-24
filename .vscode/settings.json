@@ -19,6 +19,9 @@
         "tofsensor.h": "c",
         "crtp_localization_service.h": "c",
         "sensfusion6.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "freertos.h": "c",
+        "deck.h": "c",
+        "param.h": "c"
     }
 }
