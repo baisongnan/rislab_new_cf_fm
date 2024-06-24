@@ -22,6 +22,8 @@
         "stdbool.h": "c",
         "freertos.h": "c",
         "deck.h": "c",
-        "param.h": "c"
+        "param.h": "c",
+        "queue.h": "c",
+        "math.h": "c"
     }
 }
