@@ -131,10 +131,11 @@ static float qw_desired_delay = 1.0f;
 static float qx_desired_delay = 0.0f;
 static float qy_desired_delay = 0.0f;
 static float qz_desired_delay = 0.0f;
+static float external_loop_freq = 0.0f;
 #endif
 uint32_t timestamp_setpoint = 0;
 
-static float external_loop_freq = 0.0f;
+
 // static uint32_t time_gap_setpoint = 10000;
 
 float acc_norm_delay = 0;
@@ -157,7 +158,12 @@ float leg_angle = 0;
 
 float get_leg_angle()
 {
-  return leg_angle;
+  return leg_angle*0.0174532925199433f;
+}
+
+float get_body_pitch()
+{
+  return state.attitude.pitch*0.0174532925199433f;
 }
 
 
@@ -498,13 +504,13 @@ static void stabilizerTask(void *param)
         {
           // landing
           JST = 2;
-          foc_enable();
+          foc_disable();
         }
         else if (acc_norm < 4.0f && acc_norm_delay >= 4.0f)
         {
           // takeoff
           JST = 1;
-          foc_disable();
+          foc_enable();
         }
       }
       acc_norm_delay = acc_norm;
@@ -702,8 +708,10 @@ PARAM_ADD(PARAM_FLOAT, kdy, &kd_y)
 PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
 PARAM_ADD(PARAM_FLOAT, kvq, &Kvq)
 PARAM_ADD(PARAM_FLOAT, kvqf, &Kvq_filter_gain)
-PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
+#ifdef RATE_CONTROL
+PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
+#endif
 // PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
 // PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
 

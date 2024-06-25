@@ -102,6 +102,7 @@ uint8_t tempbuffer;
 uint8_t motorQE[6];
 uint8_t motorTE[6];
 static uint8_t enable_foc_motor = 0;
+static uint8_t leg_pitch_absolute = 0;
 
 void foc_enable()
 {
@@ -181,11 +182,20 @@ void focTask(void *param)
 
     // main loop
     while (1)
-    {   
+    {
         vTaskDelay(M2T(2));
 
         if (enable_foc_motor)
-            send_foc_target(get_leg_angle());
+        {
+            if (leg_pitch_absolute)
+            {
+                send_foc_target(get_leg_angle() - get_body_pitch());
+            }
+            else
+            {
+                send_foc_target(get_leg_angle());
+            }
+        }
         else
             disable_foc();
 
@@ -245,6 +255,7 @@ DECK_DRIVER(foc_motor);
 
 PARAM_GROUP_START(foc_motor)
 PARAM_ADD(PARAM_UINT8, efm, &enable_foc_motor)
+PARAM_ADD(PARAM_UINT8, lpa, &leg_pitch_absolute)
 PARAM_GROUP_STOP(foc_motor)
 
 LOG_GROUP_START(foc_motorlog)

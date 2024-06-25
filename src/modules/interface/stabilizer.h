@@ -67,3 +67,4 @@ void stabilizerSetEmergencyStopTimeout(int timeout);
 
 #endif /* STABILIZER_H_ */
 float get_leg_angle();
+float get_body_pitch();
