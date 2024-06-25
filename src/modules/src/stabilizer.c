@@ -159,7 +159,7 @@ float get_leg_angle()
 {
   return leg_angle;
 }
-static uint8_t leg_auto_control = false;
+
 
 float limint16(float in)
 {
@@ -490,19 +490,21 @@ static void stabilizerTask(void *param)
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
       // this run in jumping mode only
+      acc_norm = sensorData.acc.z * sensorData.acc.z + sensorData.acc.x * sensorData.acc.x;
       if (!get_gravity_correction())
       {
-        acc_norm = (sensorData.acc.z * sensorData.acc.z + sensorData.acc.x * sensorData.acc.x);
         // hopping state detection
         if (acc_norm > 4.0f && acc_norm_delay <= 4.0f)
         {
           // landing
           JST = 2;
+          foc_enable();
         }
         else if (acc_norm < 4.0f && acc_norm_delay >= 4.0f)
         {
           // takeoff
           JST = 1;
+          foc_disable();
         }
       }
       acc_norm_delay = acc_norm;
@@ -711,7 +713,6 @@ PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 PARAM_ADD(PARAM_UINT8, pcomp, &enable_pitch_compress)
-PARAM_ADD(PARAM_UINT8, lac, &leg_auto_control)
 PARAM_ADD(PARAM_UINT8, jstm, &JST_motor_control)
 
 PARAM_GROUP_STOP(stabilizer)

@@ -103,6 +103,16 @@ uint8_t motorQE[6];
 uint8_t motorTE[6];
 static uint8_t enable_foc_motor = 0;
 
+void foc_enable()
+{
+    enable_foc_motor = 1;
+}
+
+void foc_disable()
+{
+    enable_foc_motor = 0;
+}
+
 uint16_t tick = 0;
 
 static union
