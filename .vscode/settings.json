@@ -24,6 +24,7 @@
         "deck.h": "c",
         "param.h": "c",
         "queue.h": "c",
-        "math.h": "c"
+        "math.h": "c",
+        "stabilizer.h": "c"
     }
 }

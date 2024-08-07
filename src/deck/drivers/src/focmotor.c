@@ -25,6 +25,7 @@
 #include "uart1.h"
 
 #define PACKET_SIZE 9
+#define VELOCITY_STREAMING
 
 static bool isInit_2 = false;
 static TaskHandle_t xHandle_2 = NULL;
@@ -134,6 +135,14 @@ static union
     unsigned char bytes[4];
 } motor_current_t;
 
+#ifdef VELOCITY_STREAMING
+static union
+{
+    float a;
+    unsigned char bytes[4];
+} motor_velocity_t;
+#endif
+
 float get_vq()
 {
     return motor_current_t.a;
@@ -171,12 +180,21 @@ void focTask(void *param)
     if (uart2Test())
         DEBUG_PRINT("UART2 ready.\n");
 
-    // check motor condition
+// check motor condition
+#ifdef VELOCITY_STREAMING
+    while (motor_angle_t.bytes[0] != 'M' || motor_angle_t.bytes[1] != 'V')
+    {
+        uart2GetData(4, motor_angle_t.bytes);
+        vTaskDelay(M2T(100));
+    }
+#else
     while (motor_angle_t.bytes[0] != 'M' || motor_angle_t.bytes[1] != 'R')
     {
         uart2GetData(4, motor_angle_t.bytes);
         vTaskDelay(M2T(100));
     }
+#endif
+
     motor_ready = true;
     DEBUG_PRINT("motor ready.\n");
 
@@ -204,6 +222,9 @@ void focTask(void *param)
         {
             uart2GetDataWithTimeout(4, motor_angle_t.bytes, M2T(100));
             uart2GetDataWithTimeout(4, motor_current_t.bytes, M2T(100));
+#ifdef VELOCITY_STREAMING
+            uart2GetDataWithTimeout(4, motor_velocity_t.bytes, M2T(100));
+#endif
         }
     }
 }
@@ -261,5 +282,8 @@ PARAM_GROUP_STOP(foc_motor)
 LOG_GROUP_START(foc_motorlog)
 LOG_ADD(LOG_FLOAT, angle, &motor_angle_t.a)
 LOG_ADD(LOG_FLOAT, curr, &motor_current_t.a)
+#ifdef VELOCITY_STREAMING
+LOG_ADD(LOG_FLOAT, velo, &motor_velocity_t.a)
+#endif
 LOG_ADD(LOG_UINT16, distance, &tof_distance)
 LOG_GROUP_STOP(foc_motorlog)
