@@ -25,7 +25,7 @@
 #include "uart1.h"
 
 #define PACKET_SIZE 9
-// #define VELOCITY_STREAMING
+#define VELOCITY_STREAMING
 
 static bool isInit_2 = false;
 static TaskHandle_t xHandle_2 = NULL;
