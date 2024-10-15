@@ -22,10 +22,39 @@
 #include "uart1.h"
 
 #define PACKET_SIZE 9
+#define PACKET_SIZE_1 PACKET_SIZE-1
+#define PACKET_SIZE_2 PACKET_SIZE-2
 
+#define QUEUE_SIZE 4  // 队列的最大长度，可以修改为任意正整数 N
+#define ONE_OVER_DTIME (1.0f/((QUEUE_SIZE-1)*0.001f)/1000.0f)
+typedef struct {
+    uint16_t items[QUEUE_SIZE];
+    uint8_t count;
+} Queue;
+
+void initQueue(Queue *q) {
+    q->count = 0;
+}
+
+int16_t enqueue(Queue *q, uint16_t value) {
+    q->count = (q->count + 1) % QUEUE_SIZE;
+    q->items[q->count] = value;
+    return value - q->items[(q->count + 1) %QUEUE_SIZE];
+}
+
+// #define DEBUGING_MODE // show sample time and UART Errors.
+
+static Queue q;
 static bool isInit = false;
 static TaskHandle_t xHandle = NULL;
 static uint16_t tof_distance = 0;
+
+#ifdef DEBUGING_MODE
+uint64_t t = 0;
+uint64_t t_delay = 0;
+uint16_t dt = 0;
+uint8_t error_flag = 0;
+#endif
 
 uint8_t calculateChecksum(const uint8_t *packet, uint8_t len)
 {
@@ -59,10 +88,11 @@ void uart1Read(uint8_t *packet, uint8_t len)
 
 void tofTask(void *param)
 {
+    initQueue(&q);
     const uint32_t baudrate = 460800;
     uint8_t cmdStartMeasure[5] = {0xAA, 0x55, 0x60, 0x00, 0x5F};
     uint8_t cmdStopMeasure[5] = {0xAA, 0x55, 0x61, 0x00, 0x60};
-    uint8_t cmdSetFrequency[6] = {0xAA, 0x55, 0x64, 0x01, 0x03, 0x67}; // {00:10, 01:100, 02:200, 03:500, 04:1000, 05:1800} Hz
+    uint8_t cmdSetFrequency[6] = {0xAA, 0x55, 0x64, 0x01, 0x04, 0x68}; // {00:10, 01:100, 02:200, 03:500, 04:1000, 05:1800} Hz
     // uint8_t repsFreq[6] = {0};
     uint8_t response[PACKET_SIZE] = {0};
 
@@ -81,9 +111,22 @@ void tofTask(void *param)
         uart1Read(response, 2);
         if (response[0] == 0xAA && response[1] == 0x55)
         {
-            uart1Read(response + 2, PACKET_SIZE - 2);
-            if (response[PACKET_SIZE - 1] != calculateChecksum(response, PACKET_SIZE))
+#ifdef DEBUGING_MODE        
+            error_flag = 0;
+#endif            
+            uart1Read(response + 2, PACKET_SIZE_2);
+            if (response[PACKET_SIZE_1] != calculateChecksum(response, PACKET_SIZE))
+            {
+#ifdef DEBUGING_MODE
+                error_flag = 1;
+#endif
                 continue;
+            }
+#ifdef DEBUGING_MODE
+            t_delay = t;
+            t = usecTimestamp();
+            dt = t - t_delay;
+#endif
             tof_distance = (response[5] << 8) | response[4];
         }
     }
@@ -93,12 +136,9 @@ static void tofInit(DeckInfo *info)
 {
     if (isInit)
         return;
-
     DEBUG_PRINT("Initialize.\n");
-
     xTaskCreate(tofTask, "TOF_TASK",
-                configMINIMAL_STACK_SIZE, NULL, 1, &xHandle);
-
+                configMINIMAL_STACK_SIZE, NULL, 2, &xHandle);
     isInit = true;
 }
 
@@ -106,9 +146,7 @@ static bool tofTest()
 {
     if (!isInit)
         return false;
-
     DEBUG_PRINT("Test passed.\n");
-
     return true;
 }
 
@@ -126,4 +164,8 @@ DECK_DRIVER(tof_deck);
 
 LOG_GROUP_START(tof)
 LOG_ADD(LOG_UINT16, distance, &tof_distance)
+#ifdef DEBUGING_MODE
+LOG_ADD(LOG_UINT16, dt, &dt)
+LOG_ADD(LOG_UINT8, error_f, &error_flag)
+#endif
 LOG_GROUP_STOP(tof)

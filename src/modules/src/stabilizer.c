@@ -25,7 +25,7 @@
  */
 #define DEBUG_MODULE "STAB"
 
-#define FLIP_FCN
+// #define FLIP_FCN
 
 #include <math.h>
 
@@ -107,23 +107,11 @@ static float tau_x = 0.0f;
 static float tau_y = 0.0f;
 static float tau_z = 0.0f;
 
-static float omega_x = 0.0f;
-static float omega_y = 0.0f;
-static float omega_z = 0.0f;
-
 static float qw_desired = 1.0f;
 static float qx_desired = 0.0f;
 static float qy_desired = 0.0f;
 static float qz_desired = 0.0f;
 
-static float qw_desired_delay = 1.0f;
-static float qx_desired_delay = 0.0f;
-static float qy_desired_delay = 0.0f;
-static float qz_desired_delay = 0.0f;
-
-uint32_t timestamp_setpoint = 0;
-
-static float external_loop_freq = 100.0f;
 // static uint32_t time_gap_setpoint = 10000;
 
 #ifdef FLIP_FCN
@@ -161,75 +149,6 @@ bool same_attitude(float w, float x, float y, float z, float w_d, float x_d, flo
   // Check if the absolute value of the dot product is close to 1
   return fabsf(dot_product) > 0.999999f;
 }
-
-// void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
-//               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
-// {
-//   if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
-//   {
-//     *tau_x = 0.0F;
-//     *tau_y = 0.0F;
-//     *tau_z = 0.0F;
-//   }
-//   else
-//   {
-//     float b_temp2_tmp;
-//     float temp2_tmp;
-//     float wwd;
-//     float x2;
-//     float xd2;
-//     float xxd;
-//     float y2;
-//     float yd2;
-//     float yyd;
-//     float z2;
-//     float zd2;
-//     float zzd;
-//     wwd = w * w_d;
-//     xxd = x * x_d;
-//     yyd = y * y_d;
-//     zzd = z * z_d;
-//     x2 = x * x;
-//     y2 = y * y;
-//     z2 = z * z;
-//     xd2 = x_d * x_d;
-//     yd2 = y_d * y_d;
-//     zd2 = z_d * z_d;
-//     temp2_tmp = 2.0F * xxd;
-//     b_temp2_tmp = 2.0F * wwd;
-//     x2 = (((((((((((((((((((-2.0F * x2 * xd2 - x2 * yd2) - x2 * zd2) + x2) -
-//                          temp2_tmp * yyd) -
-//                         temp2_tmp * zzd) -
-//                        b_temp2_tmp * xxd) -
-//                       xd2 * y2) -
-//                      xd2 * z2) +
-//                     xd2) -
-//                    2.0F * y2 * yd2) -
-//                   y2 * zd2) +
-//                  y2) -
-//                 2.0F * yyd * zzd) -
-//                b_temp2_tmp * yyd) -
-//               yd2 * z2) +
-//              yd2) -
-//             2.0F * z2 * zd2) +
-//            z2) -
-//           b_temp2_tmp * zzd) +
-//          zd2;
-//     if (x2 <= 0.0F)
-//     {
-//       *tau_x = 0.0F;
-//       *tau_y = 0.0F;
-//       *tau_z = 0.0F;
-//     }
-//     else
-//     {
-//       x2 = 2.0F * acosf(((wwd + xxd) + yyd) + zzd) / sqrtf(x2);
-//       *tau_x = x2 * (((w * x_d - w_d * x) - y * z_d) + y_d * z);
-//       *tau_y = x2 * (((w * y_d - w_d * y) + x * z_d) - x_d * z);
-//       *tau_z = x2 * (((w * z_d - w_d * z) - x * y_d) + x_d * y);
-//     }
-//   }
-// }
 
 void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
@@ -354,6 +273,8 @@ static void calcSensorToOutputLatency(const sensorData_t *sensorData)
   uint64_t outTimestamp = usecTimestamp();
   inToOutLatency = outTimestamp - sensorData->interruptTimestamp;
 }
+
+#define DEGREE2RADIANS (float)(M_PI)/180.0f
 
 void eul2quat_my(float yaw, float pitch, float roll,
                  float *w, float *x, float *y, float *z)
@@ -558,52 +479,8 @@ static void stabilizerTask(void *param)
         kp_z_temp = kp_z;
       }
 
-      if (timestamp_setpoint == setpoint.timestamp)
-      {
-        // no control input is received
-        ;
-      }
-      else
-      {
-        // control input is received
-        if (setpoint.timestamp > timestamp_setpoint)
-          // time_gap_setpoint = setpoint.timestamp - timestamp_setpoint;
-
-          timestamp_setpoint = setpoint.timestamp;
-
-        qw_desired_delay = qw_desired;
-        qx_desired_delay = qx_desired;
-        qy_desired_delay = qy_desired;
-        qz_desired_delay = qz_desired;
-
-        // compute desired quat
-        eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
-                    setpoint.attitude.pitch * -0.0174532925199433f,
-                    setpoint.attitude.roll * 0.0174532925199433f,
-                    &qw_desired,
-                    &qx_desired,
-                    &qy_desired,
-                    &qz_desired);
-
-        pcontrol(qw_desired_delay,
-                 qx_desired_delay,
-                 qy_desired_delay,
-                 qz_desired_delay,
-                 qw_desired,
-                 qx_desired,
-                 qy_desired,
-                 qz_desired,
-                 &omega_x, &omega_y, &omega_z);
-
-        // // desired angular rate in degrees
-        omega_x = omega_x * 57.2957795130823f * external_loop_freq;
-        omega_y = omega_y * 57.2957795130823f * external_loop_freq;
-        omega_z = omega_z * 57.2957795130823f * external_loop_freq;
-
-        omega_x = lim_num(omega_x, 300);
-        omega_y = lim_num(omega_y, 300);
-        omega_z = lim_num(omega_z, 300);
-      }
+      eul2quat_my(setpoint.attitudeRate.yaw*DEGREE2RADIANS, setpoint.attitude.pitch*DEGREE2RADIANS, setpoint.attitude.roll*DEGREE2RADIANS, 
+      &qw_desired,  &qx_desired,  &qy_desired,  &qz_desired);
 
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
@@ -625,27 +502,12 @@ static void stabilizerTask(void *param)
                  qz_desired,
                  &tau_x, &tau_y, &tau_z);
 
-        // float angle_error = sqrtf(tau_x * tau_x + tau_y * tau_y + tau_z * tau_z);
-
-        // if (angle_error > angle_error_threshold)
-        // {
-        //   omega_x = (tau_x/angle_error) * angle_error_velocity;
-        //   omega_y = (tau_y/angle_error) * angle_error_velocity;
-        //   omega_z = (tau_z/angle_error) * angle_error_velocity;
-        // }
-        // else
-        // {
-        //   omega_x = 0.0f;
-        //   omega_y = 0.0f;
-        //   omega_z = 0.0f;
-        // }
-
         tau_x = tau_x + tau_x_offset;
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
 
-        tau_omega_x = omega_x - sensorData.gyro.x;
-        tau_omega_y = omega_x - sensorData.gyro.y;
+        tau_omega_x =  - sensorData.gyro.x;
+        tau_omega_y =  - sensorData.gyro.y;
         norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
 
         if (norm_tau_omega > norm_tau_omega_limit)
@@ -657,7 +519,7 @@ static void stabilizerTask(void *param)
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
         control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_x - sensorData.gyro.z) * kd_z);
+        control.yaw = -(int16_t)limint16(tau_z * kp_z + (- sensorData.gyro.z) * kd_z);
 #ifdef FLIP_FCN
         if (fabsf(flip_thrust - setpoint.thrust) < 2.0f)
         {
@@ -737,7 +599,6 @@ PARAM_ADD(PARAM_FLOAT, kpxy, &kp_xy)
 PARAM_ADD(PARAM_FLOAT, kpz, &kp_z)
 PARAM_ADD(PARAM_FLOAT, kdxy, &kd_xy)
 PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
-PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 
 // PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
 // PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
@@ -751,7 +612,6 @@ PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 #ifdef FLIP_FCN
 PARAM_ADD(PARAM_INT16, fr, &flip_roll)
 PARAM_ADD(PARAM_FLOAT, sa, &switch_angle)
-
 
 #endif
 
