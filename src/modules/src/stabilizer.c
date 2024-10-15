@@ -479,8 +479,11 @@ static void stabilizerTask(void *param)
         kp_z_temp = kp_z;
       }
 
-      eul2quat_my(setpoint.attitudeRate.yaw*DEGREE2RADIANS, setpoint.attitude.pitch*DEGREE2RADIANS, setpoint.attitude.roll*DEGREE2RADIANS, 
-      &qw_desired,  &qx_desired,  &qy_desired,  &qz_desired);
+      eul2quat_my(
+        -setpoint.attitudeRate.yaw*DEGREE2RADIANS, 
+        -setpoint.attitude.pitch*DEGREE2RADIANS, 
+        setpoint.attitude.roll*DEGREE2RADIANS, 
+        &qw_desired,  &qx_desired,  &qy_desired,  &qz_desired);
 
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
