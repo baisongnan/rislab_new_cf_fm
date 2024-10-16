@@ -58,6 +58,8 @@
 #include "statsCnt.h"
 #include "static_mem.h"
 #include "rateSupervisor.h"
+#include "tofsensor.h"
+#include "sensfusion6.h"
 
 static bool isInit;
 static bool emergencyStop = false;
@@ -73,7 +75,6 @@ static control_t control;
 
 static float attitude_control_limit;
 static float idle_thrust;
-bool thrust_flag;
 
 static motors_thrust_uncapped_t motorThrustUncapped;
 static motors_thrust_uncapped_t motorThrustBatCompUncapped;
@@ -92,9 +93,38 @@ static float kp_z = 6000;
 static float kp_z_temp = 6000;
 
 static float norm_tau_omega_limit = 100.0f;
+// JSTO
+static float JSTO_acc_z_limit = 1.5;
+static uint8_t jumping_state = false;
+static uint8_t jumping_state_old = false;
+static int16_t delta_l_max = -225;
+static int16_t delta_l_max_state = -225;
+static float omega_mean[3] = {0.0f, 0.0f, 0.0f};
+// static float omega_mean_world[3] = {0.0f, 0.0f, 0.0f};
+// static float quat_TO[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+static uint16_t cycles = 1;
 
-// static float angle_error_threshold = 1.57f;
-// static float angle_error_velocity = 300.0f;
+float q_LDTO[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+static uint32_t q_LDTO_compressed = 0;
+// Function to rotate a vector using quaternion
+// void rotate_vector_by_quaternion(
+//     float vx, float vy, float vz,
+//     float qw, float qx, float qy, float qz,
+//     float *vqx, float *vqy, float *vqz)
+// {
+//   float qvw, qvx, qvy, qvz;
+//   float qvqw, qvqx, qvqy, qvqz;
+//   // Quaternion multiplied by vector (treated as quaternion with real part 0)
+//   quaternion_multiply(qw, qx, qy, qz, 0, vx, vy, vz, &qvw, &qvx, &qvy, &qvz);
+//   // Result multiplied by the conjugate of the original quaternion
+//   quaternion_multiply(qvw, qvx, qvy, qvz, qw, -qx, -qy, -qz, &qvqw, &qvqx, &qvqy, &qvqz);
+//   // Output the vector part of the resulting quaternion
+//   *vqx = qvqx;
+//   *vqy = qvqy;
+//   *vqz = qvqz;
+// }
+
+// JSTO end
 
 static float kd_xy = 10;
 static float kd_z = 10;
@@ -111,8 +141,6 @@ static float qw_desired = 1.0f;
 static float qx_desired = 0.0f;
 static float qy_desired = 0.0f;
 static float qz_desired = 0.0f;
-
-// static uint32_t time_gap_setpoint = 10000;
 
 #ifdef FLIP_FCN
 float flip_thrust;
@@ -189,7 +217,6 @@ void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
     }
     else
     {
-
       axang4 = sqrtf(1.0F - temp_1 * temp_1);
       axang1 = (((w * x_d - w_d * x) + y * z_d) - y_d * z) / axang4;
       axang2 = (((w * y_d - w_d * y) - x * z_d) + x_d * z) / axang4;
@@ -274,7 +301,7 @@ static void calcSensorToOutputLatency(const sensorData_t *sensorData)
   inToOutLatency = outTimestamp - sensorData->interruptTimestamp;
 }
 
-#define DEGREE2RADIANS (float)(M_PI)/180.0f
+#define DEGREE2RADIANS (float)(M_PI) / 180.0f
 
 void eul2quat_my(float yaw, float pitch, float roll,
                  float *w, float *x, float *y, float *z)
@@ -440,9 +467,7 @@ static void stabilizerTask(void *param)
   DEBUG_PRINT("Ready to fly.\n");
 
   idle_thrust = 1500.0f;
-
   attitude_control_limit = 1300.0f;
-  thrust_flag = true;
 
   float tau_omega_x = 0.0f;
   float tau_omega_y = 0.0f;
@@ -467,6 +492,66 @@ static void stabilizerTask(void *param)
       commanderGetSetpoint(&setpoint, &state);
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
+      // JSTO
+      jumping_state_old = jumping_state;
+      if (sensorData.acc.z > JSTO_acc_z_limit) // stance phase
+      {
+        jumping_state = true;
+      }
+      else // aerial phase
+      {
+        jumping_state = false;
+      }
+      if (jumping_state && !jumping_state_old)
+      {
+        // landing
+        delta_l_max = get_tof_distance();
+        omega_mean[0] = sensorData.gyro.x;
+        omega_mean[1] = sensorData.gyro.y;
+        omega_mean[2] = sensorData.gyro.z;
+
+        q_LDTO[0] = state.attitudeQuaternion.x;
+        q_LDTO[1] = state.attitudeQuaternion.y;
+        q_LDTO[2] = state.attitudeQuaternion.z;
+        q_LDTO[3] = state.attitudeQuaternion.w;
+        q_LDTO_compressed = quatcompress(q_LDTO);
+        cycles = 1;
+      }
+      else if (!jumping_state && jumping_state_old)
+      {
+        // takeoff
+        q_LDTO[0] = state.attitudeQuaternion.x;
+        q_LDTO[1] = state.attitudeQuaternion.y;
+        q_LDTO[2] = state.attitudeQuaternion.z;
+        q_LDTO[3] = state.attitudeQuaternion.w;
+        q_LDTO_compressed = quatcompress(q_LDTO);
+      }
+      else if (jumping_state)
+      {
+        // stance phase
+        if (get_tof_distance() > delta_l_max)
+        {
+          delta_l_max = get_tof_distance();
+        }
+        uint16_t cyclesP1 = cycles + 1;
+        omega_mean[0] = (cycles * omega_mean[0] / cyclesP1) + (sensorData.gyro.x / (cyclesP1));
+        omega_mean[1] = (cycles * omega_mean[1] / cyclesP1) + (sensorData.gyro.y / (cyclesP1));
+        omega_mean[2] = (cycles * omega_mean[2] / cyclesP1) + (sensorData.gyro.z / (cyclesP1));
+        cycles = cyclesP1;
+        // count = cycles;
+        // rotate_vector_by_quaternion(
+        //     omega_mean[0], omega_mean[1], omega_mean[2],
+        //     quat_TO[0], quat_TO[1], quat_TO[2], quat_TO[3],
+        //     &omega_mean_world[0], &omega_mean_world[1], &omega_mean_world[2]);
+      }
+
+      if (jumping_state)
+        delta_l_max_state = delta_l_max;
+      else
+        delta_l_max_state = -delta_l_max;
+
+      // JSTO end
+
       // disable P controller when thrust is equal to attitude_control_limit
       if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
       {
@@ -480,10 +565,10 @@ static void stabilizerTask(void *param)
       }
 
       eul2quat_my(
-        -setpoint.attitudeRate.yaw*DEGREE2RADIANS, 
-        -setpoint.attitude.pitch*DEGREE2RADIANS, 
-        setpoint.attitude.roll*DEGREE2RADIANS, 
-        &qw_desired,  &qx_desired,  &qy_desired,  &qz_desired);
+          -setpoint.attitudeRate.yaw * DEGREE2RADIANS,
+          -setpoint.attitude.pitch * DEGREE2RADIANS,
+          setpoint.attitude.roll * DEGREE2RADIANS,
+          &qw_desired, &qx_desired, &qy_desired, &qz_desired);
 
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
@@ -509,8 +594,8 @@ static void stabilizerTask(void *param)
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
 
-        tau_omega_x =  - sensorData.gyro.x;
-        tau_omega_y =  - sensorData.gyro.y;
+        tau_omega_x = -sensorData.gyro.x;
+        tau_omega_y = -sensorData.gyro.y;
         norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
 
         if (norm_tau_omega > norm_tau_omega_limit)
@@ -522,7 +607,7 @@ static void stabilizerTask(void *param)
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
         control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (- sensorData.gyro.z) * kd_z);
+        control.yaw = -(int16_t)limint16(tau_z * kp_z + (-sensorData.gyro.z) * kd_z);
 #ifdef FLIP_FCN
         if (fabsf(flip_thrust - setpoint.thrust) < 2.0f)
         {
@@ -603,19 +688,19 @@ PARAM_ADD(PARAM_FLOAT, kpz, &kp_z)
 PARAM_ADD(PARAM_FLOAT, kdxy, &kd_xy)
 PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
 
-// PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
-// PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
-
 PARAM_ADD(PARAM_FLOAT, qxo, &tau_x_offset)
 PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
 PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 
+// JSTO
+PARAM_ADD(PARAM_FLOAT, JSTOz, &JSTO_acc_z_limit)
+// JSTO end
+
 #ifdef FLIP_FCN
 PARAM_ADD(PARAM_INT16, fr, &flip_roll)
 PARAM_ADD(PARAM_FLOAT, sa, &switch_angle)
-
 #endif
 
 PARAM_GROUP_STOP(stabilizer)
@@ -748,6 +833,16 @@ LOG_GROUP_START(stabilizer)
 
 // LOG_ADD(LOG_FLOAT, taux, &tau_x)
 // LOG_ADD(LOG_FLOAT, tauy, &tau_y)
+
+// JSTO
+LOG_ADD(LOG_UINT8, jstate, &jumping_state)
+LOG_ADD(LOG_INT16, delta_l, &delta_l_max_state)
+LOG_ADD(LOG_UINT16, cycles, &cycles)
+LOG_ADD(LOG_FLOAT, Ox, &omega_mean[0])
+LOG_ADD(LOG_FLOAT, Oy, &omega_mean[1])
+LOG_ADD(LOG_FLOAT, Oz, &omega_mean[2])
+LOG_ADD(LOG_UINT32, qLDTO, &q_LDTO_compressed)
+// JSTO end
 
 /**
  * @brief Estimated roll

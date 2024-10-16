@@ -30,6 +30,10 @@
 void setquat(float w, float x, float y, float z);
 void applyquat(float w, float x, float y, float z);
 void applyquat_body(float w, float x, float y, float z); 
+void quaternion_multiply(
+    float q1w, float q1x, float q1y, float q1z,
+    float q2w, float q2x, float q2y, float q2z,
+    float *q3w, float *q3x, float *q3y, float *q3z);
 
 void sensfusion6Init(void);
 bool sensfusion6Test(void);

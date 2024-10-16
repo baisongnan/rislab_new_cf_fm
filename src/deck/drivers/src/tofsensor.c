@@ -20,6 +20,7 @@
 #include "queue.h"
 #include "deck.h"
 #include "uart1.h"
+#include "tofsensor.h"
 
 #define PACKET_SIZE 9
 #define PACKET_SIZE_1 PACKET_SIZE-1
@@ -27,6 +28,7 @@
 
 #define QUEUE_SIZE 4  // 队列的最大长度，可以修改为任意正整数 N
 #define ONE_OVER_DTIME (1.0f/((QUEUE_SIZE-1)*0.001f)/1000.0f)
+
 typedef struct {
     uint16_t items[QUEUE_SIZE];
     uint8_t count;
@@ -47,7 +49,12 @@ int16_t enqueue(Queue *q, uint16_t value) {
 static Queue q;
 static bool isInit = false;
 static TaskHandle_t xHandle = NULL;
+
 static uint16_t tof_distance = 0;
+int16_t get_tof_distance()
+{
+    return -(int16_t)tof_distance;
+}
 
 #ifdef DEBUGING_MODE
 uint64_t t = 0;
