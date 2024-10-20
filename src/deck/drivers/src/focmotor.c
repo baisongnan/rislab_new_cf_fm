@@ -24,6 +24,14 @@
 #include "stabilizer.h"
 
 #define VELOCITY_STREAMING
+// #define DEBUGING_MODE // show sample time
+
+#ifdef DEBUGING_MODE
+uint64_t t = 0;
+uint64_t t_delay = 0;
+static uint16_t dt = 0;
+uint8_t error_flag = 0;
+#endif
 
 static bool isInit = false;
 static TaskHandle_t xHandle = NULL;
@@ -133,7 +141,7 @@ void focTask(void *param)
     // main loop
     while (1)
     {
-        vTaskDelay(M2T(2));
+        vTaskDelay(M2T(1));
 
         if (enable_foc_motor)
         {
@@ -157,7 +165,23 @@ void focTask(void *param)
 #ifdef VELOCITY_STREAMING
             uart2GetDataWithTimeout(4, motor_velocity_t.bytes, M2T(100));
 #endif
+
+#ifdef DEBUGING_MODE
+            error_flag = 0;
+#endif
         }
+        else
+        {
+#ifdef DEBUGING_MODE
+            error_flag = 1;
+#endif
+        }
+
+#ifdef DEBUGING_MODE
+        t_delay = t;
+        t = usecTimestamp();
+        dt = t - t_delay;
+#endif
     }
 }
 
@@ -169,7 +193,7 @@ static void focInit(DeckInfo *info)
     DEBUG_PRINT("Initialize.\n");
 
     xTaskCreate(focTask, "FOC_TASK",
-                configMINIMAL_STACK_SIZE, NULL, 1, &xHandle);
+                configMINIMAL_STACK_SIZE, NULL, 2, &xHandle);
 
     isInit = true;
 }
@@ -206,5 +230,9 @@ LOG_ADD(LOG_FLOAT, angle, &motor_angle_t.a)
 LOG_ADD(LOG_FLOAT, curr, &motor_current_t.a)
 #ifdef VELOCITY_STREAMING
 LOG_ADD(LOG_FLOAT, velo, &motor_velocity_t.a)
+#endif
+#ifdef DEBUGING_MODE
+LOG_ADD(LOG_UINT16, dt, &dt)
+LOG_ADD(LOG_UINT8, error_f, &error_flag)
 #endif
 LOG_GROUP_STOP(foc_motorlog)

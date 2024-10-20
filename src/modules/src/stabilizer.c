@@ -79,7 +79,6 @@ static control_t control;
 
 static float attitude_control_limit;
 static float idle_thrust;
-bool thrust_flag;
 
 static motors_thrust_uncapped_t motorThrustUncapped;
 static motors_thrust_uncapped_t motorThrustBatCompUncapped;
@@ -116,23 +115,12 @@ static float tau_z_offset = 0.0f;
 static float tau_x = 0.0f;
 static float tau_y = 0.0f;
 static float tau_z = 0.0f;
-#ifdef RATE_CONTROL
-static float omega_x = 0.0f;
-static float omega_y = 0.0f;
-static float omega_z = 0.0f;
-#endif
+
 static float qw_desired = 1.0f;
 static float qx_desired = 0.0f;
 static float qy_desired = 0.0f;
 static float qz_desired = 0.0f;
 
-#ifdef RATE_CONTROL
-static float qw_desired_delay = 1.0f;
-static float qx_desired_delay = 0.0f;
-static float qy_desired_delay = 0.0f;
-static float qz_desired_delay = 0.0f;
-static float external_loop_freq = 0.0f;
-#endif
 uint32_t timestamp_setpoint = 0;
 
 
@@ -154,11 +142,11 @@ union
     __fp16 pitch_angle;
   } halves;
 } FloatWithTwoHalfPrecision;
-float leg_angle = 0;
+float leg_angle = 0.0f;
 
 float get_leg_angle()
 {
-  return leg_angle*0.0174532925199433f;
+  return leg_angle*0.0174532925199433f; 
 }
 
 float get_body_pitch()
@@ -461,9 +449,7 @@ static void stabilizerTask(void *param)
   DEBUG_PRINT("Ready to fly.\n");
 
   idle_thrust = 1500.0f;
-
   attitude_control_limit = 1300.0f;
-  thrust_flag = true;
 
   float tau_omega_x = 0.0f;
   float tau_omega_y = 0.0f;
@@ -495,9 +481,9 @@ static void stabilizerTask(void *param)
 
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
-      // this run in jumping mode only
+      // this run in jumping mode only, enable and disable FOC motor
       acc_norm = sensorData.acc.z * sensorData.acc.z + sensorData.acc.x * sensorData.acc.x;
-      if (!get_gravity_correction())
+      if (!get_gravity_correction()) // hopping mode
       {
         // hopping state detection
         if (acc_norm > 4.0f && acc_norm_delay <= 4.0f)
@@ -542,12 +528,6 @@ static void stabilizerTask(void *param)
           // time_gap_setpoint = setpoint.timestamp - timestamp_setpoint;
 
           timestamp_setpoint = setpoint.timestamp;
-#ifdef RATE_CONTROL
-        qw_desired_delay = qw_desired;
-        qx_desired_delay = qx_desired;
-        qy_desired_delay = qy_desired;
-        qz_desired_delay = qz_desired;
-#endif
         // compute desired quat
         eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
                     setpoint.attitude.pitch * -0.0174532925199433f,
@@ -556,24 +536,6 @@ static void stabilizerTask(void *param)
                     &qx_desired,
                     &qy_desired,
                     &qz_desired);
-#ifdef RATE_CONTROL
-        pcontrol(qw_desired_delay,
-                 qx_desired_delay,
-                 qy_desired_delay,
-                 qz_desired_delay,
-                 qw_desired,
-                 qx_desired,
-                 qy_desired,
-                 qz_desired,
-                 &omega_x, &omega_y, &omega_z);
-        // // desired angular rate in degrees
-        omega_x = omega_x * 57.2957795130823f * external_loop_freq;
-        omega_y = omega_y * 57.2957795130823f * external_loop_freq;
-        omega_z = omega_z * 57.2957795130823f * external_loop_freq;
-        omega_x = lim_num(omega_x, 300);
-        omega_y = lim_num(omega_y, 300);
-        omega_z = lim_num(omega_z, 300);
-#endif
       }
 
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
@@ -599,13 +561,10 @@ static void stabilizerTask(void *param)
         tau_x = tau_x + tau_x_offset;
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
-#ifdef RATE_CONTROL
-        tau_omega_x = omega_x - sensorData.gyro.x;
-        tau_omega_y = omega_y - sensorData.gyro.y;
-#else
+
         tau_omega_x = -sensorData.gyro.x;
         tau_omega_y = -sensorData.gyro.y;
-#endif
+
         norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
 
         if (norm_tau_omega > norm_tau_omega_limit)
@@ -615,17 +574,11 @@ static void stabilizerTask(void *param)
         }
 
         Kvq_torque = Kvq_torque * (1 - Kvq_filter_gain) + (Kvq * get_vq()) * Kvq_filter_gain;
-#ifdef RATE_CONTROL
-        control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
-        control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq_torque);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
-#else
+
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
         control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq_torque);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (-sensorData.gyro.z) * kd_z);
-#endif
       }
       else
       {

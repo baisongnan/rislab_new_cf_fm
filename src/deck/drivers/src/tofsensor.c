@@ -59,7 +59,7 @@ int16_t get_tof_distance()
 #ifdef DEBUGING_MODE
 uint64_t t = 0;
 uint64_t t_delay = 0;
-uint16_t dt = 0;
+static uint16_t dt = 0;
 uint8_t error_flag = 0;
 #endif
 
