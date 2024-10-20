@@ -145,7 +145,7 @@ static void tofInit(DeckInfo *info)
         return;
     DEBUG_PRINT("Initialize.\n");
     xTaskCreate(tofTask, "TOF_TASK",
-                configMINIMAL_STACK_SIZE, NULL, 2, &xHandle);
+                configMINIMAL_STACK_SIZE, NULL, 1, &xHandle); // 1 is sufficient for 1000 hz
     isInit = true;
 }
 
