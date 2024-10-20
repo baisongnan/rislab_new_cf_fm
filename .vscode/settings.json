@@ -25,6 +25,7 @@
         "param.h": "c",
         "queue.h": "c",
         "math.h": "c",
-        "stabilizer.h": "c"
+        "stabilizer.h": "c",
+        "config.h": "c"
     }
 }
