@@ -81,11 +81,20 @@ static union
     float a;
     unsigned char bytes[4];
 } motor_velocity_t;
+float get_leg_veloicity()
+{
+    return motor_velocity_t.a;
+}
 #endif
 
 float get_vq()
 {
     return motor_current_t.a;
+}
+
+float foc_get_leg_angle()
+{
+    return motor_angle_t.a;
 }
 
 void send_foc_target(float tg)
@@ -141,7 +150,7 @@ void focTask(void *param)
     // main loop
     while (1)
     {
-        vTaskDelay(M2T(1));
+        vTaskDelay(M2T(2));
 
         if (enable_foc_motor)
         {

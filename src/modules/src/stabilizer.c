@@ -25,8 +25,6 @@
  */
 #define DEBUG_MODULE "STAB"
 
-// #define RATE_CONTROL
-
 #include <math.h>
 
 #include "FreeRTOS.h"
@@ -60,6 +58,7 @@
 #include "rateSupervisor.h"
 #include "focmotor.h"
 #include "sensfusion6.h"
+#include "tofsensor.h"
 
 static bool isInit;
 static bool emergencyStop = false;
@@ -101,8 +100,20 @@ static float kp_z_temp = 6000;
 
 static float norm_tau_omega_limit = 100.0f;
 
-// static float angle_error_threshold = 1.57f;
-// static float angle_error_velocity = 300.0f;
+// JSTO
+static float JSTO_acc_z_limit = 1.5;
+static uint8_t jumping_state = false;
+static uint8_t jumping_state_old = false;
+static int16_t delta_l_max = -225;
+static int16_t delta_l_max_state = -225; 
+static float omega_mean[3] = {0.0f, 0.0f, 0.0f};
+static uint16_t cycles = 1;
+float q_LDTO[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+static uint32_t q_LDTO_compressed = 0;
+static uint8_t JST_motor_control = 0;
+float leg_angle_LDTO = 0.0f;
+// JSTO end
+
 
 static float kd_x = 10;
 static float kd_y = 10;
@@ -122,14 +133,6 @@ static float qy_desired = 0.0f;
 static float qz_desired = 0.0f;
 
 uint32_t timestamp_setpoint = 0;
-
-
-// static uint32_t time_gap_setpoint = 10000;
-
-float acc_norm_delay = 0;
-float acc_norm = 0;
-static uint8_t JST = 1;
-static uint8_t JST_motor_control = 0;
 
 // 定义联合体，包含一个 float 和两个 __fp16
 static uint8_t enable_pitch_compress = false;
@@ -481,25 +484,65 @@ static void stabilizerTask(void *param)
 
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
-      // this run in jumping mode only, enable and disable FOC motor
-      acc_norm = sensorData.acc.z * sensorData.acc.z + sensorData.acc.x * sensorData.acc.x;
-      if (!get_gravity_correction()) // hopping mode
+      // JSTO
+      jumping_state_old = jumping_state;
+      if (sensorData.acc.z*sensorData.acc.z + sensorData.acc.x*sensorData.acc.x > JSTO_acc_z_limit*JSTO_acc_z_limit) // stance phase
       {
-        // hopping state detection
-        if (acc_norm > 4.0f && acc_norm_delay <= 4.0f)
-        {
-          // landing
-          JST = 2;
-          foc_disable();
-        }
-        else if (acc_norm < 4.0f && acc_norm_delay >= 4.0f)
-        {
-          // takeoff
-          JST = 1;
-          foc_enable();
-        }
+        jumping_state = true;
       }
-      acc_norm_delay = acc_norm;
+      else // aerial phase
+      {
+        jumping_state = false;
+      }
+      if (jumping_state && !jumping_state_old)
+      {
+        // landing
+        delta_l_max = get_tof_distance();
+        omega_mean[0] = sensorData.gyro.x;
+        omega_mean[1] = sensorData.gyro.y - get_leg_veloicity() * 57.295779513082f;
+        // omega_mean[2] = sensorData.gyro.z;
+        leg_angle_LDTO = foc_get_leg_angle();
+        q_LDTO[0] = state.attitudeQuaternion.x;
+        q_LDTO[1] = state.attitudeQuaternion.y;
+        q_LDTO[2] = state.attitudeQuaternion.z;
+        q_LDTO[3] = state.attitudeQuaternion.w;
+        q_LDTO_compressed = quatcompress(q_LDTO);
+        cycles = 1;
+        if (!get_gravity_correction())
+          foc_disable();
+      }
+      else if (!jumping_state && jumping_state_old)
+      {
+        // takeoff
+        leg_angle_LDTO = foc_get_leg_angle();
+        q_LDTO[0] = state.attitudeQuaternion.x;
+        q_LDTO[1] = state.attitudeQuaternion.y;
+        q_LDTO[2] = state.attitudeQuaternion.z;
+        q_LDTO[3] = state.attitudeQuaternion.w;
+        q_LDTO_compressed = quatcompress(q_LDTO);
+        if (!get_gravity_correction())
+          foc_enable();
+      }
+      else if (jumping_state)
+      {
+        // stance phase
+        if (get_tof_distance() > delta_l_max)
+        {
+          delta_l_max = get_tof_distance();
+        }
+        uint16_t cyclesP1 = cycles + 1;
+        omega_mean[0] = (cycles * omega_mean[0] / cyclesP1) + (sensorData.gyro.x / (cyclesP1));
+        omega_mean[1] = (cycles * omega_mean[1] / cyclesP1) + ((sensorData.gyro.y - get_leg_veloicity() * 57.295779513082f)/ (cyclesP1));
+        // omega_mean[2] = (cycles * omega_mean[2] / cyclesP1) + (sensorData.gyro.z / (cyclesP1));
+        cycles = cyclesP1;
+      }
+
+      if (jumping_state)
+        delta_l_max_state = delta_l_max;
+      else
+        delta_l_max_state = -delta_l_max;
+
+      // JSTO end
 
       // disable P controller when thrust is equal to attitude_control_limit
       if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
@@ -525,7 +568,6 @@ static void stabilizerTask(void *param)
         ;
         // control input is received
         if (setpoint.timestamp > timestamp_setpoint)
-          // time_gap_setpoint = setpoint.timestamp - timestamp_setpoint;
 
           timestamp_setpoint = setpoint.timestamp;
         // compute desired quat
@@ -590,7 +632,7 @@ static void stabilizerTask(void *param)
 
       if (JST_motor_control)
       {
-        if (acc_norm > 4.0f)
+        if (jumping_state) // stance phase
         {
           control.thrust = 2000.0f;
           control.roll = 0.0f;
@@ -635,11 +677,18 @@ static void stabilizerTask(void *param)
  * for the stabilizer module, or to do an emergency stop
  */
 PARAM_GROUP_START(stabilizer)
+
+
 /**
  * @brief Estimator type Auto select(0), complementary(1), extended kalman(2), **unscented kalman(3)  (Default: 0)
  *
  * ** Experimental, needs to be enabled in kbuild
  */
+
+// JSTO
+PARAM_ADD(PARAM_FLOAT, JSTOz, &JSTO_acc_z_limit)
+// JSTO end
+
 PARAM_ADD_CORE(PARAM_UINT8, estimator, &estimatorType)
 /**
  * @brief Controller type Auto select(0), PID(1), Mellinger(2), INDI(3), Brescianini(4) (Default: 0)
@@ -662,11 +711,6 @@ PARAM_ADD(PARAM_FLOAT, kdz, &kd_z)
 PARAM_ADD(PARAM_FLOAT, kvq, &Kvq)
 PARAM_ADD(PARAM_FLOAT, kvqf, &Kvq_filter_gain)
 
-#ifdef RATE_CONTROL
-PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
-#endif
-// PARAM_ADD(PARAM_FLOAT, aet, &angle_error_threshold)
-// PARAM_ADD(PARAM_FLOAT, aev, &angle_error_velocity)
 
 PARAM_ADD(PARAM_FLOAT, qxo, &tau_x_offset)
 PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
@@ -836,7 +880,16 @@ STATS_CNT_RATE_LOG_ADD(rtStab, &stabilizerRate)
  */
 LOG_ADD(LOG_UINT32, intToOut, &inToOutLatency)
 
-LOG_ADD(LOG_UINT8, jst, &JST)
+// JSTO
+LOG_ADD(LOG_UINT8, jstate, &jumping_state)
+LOG_ADD(LOG_INT16, delta_l, &delta_l_max_state)
+LOG_ADD(LOG_UINT16, cycles, &cycles)
+LOG_ADD(LOG_FLOAT, Ox, &omega_mean[0])
+LOG_ADD(LOG_FLOAT, Oy, &omega_mean[1])
+// LOG_ADD(LOG_FLOAT, Oz, &omega_mean[2])
+LOG_ADD(LOG_UINT32, qLDTO, &q_LDTO_compressed)
+LOG_ADD(LOG_FLOAT, laLDTO, &leg_angle_LDTO)
+// JSTO end
 
 LOG_ADD(LOG_FLOAT, la, &leg_angle)
 
