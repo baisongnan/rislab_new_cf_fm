@@ -40,6 +40,12 @@
 #define DEFAULT_IDLE_THRUST CONFIG_MOTORS_DEFAULT_IDLE_THRUST
 #endif
 
+// #define TORQUE_SUM_THRUST_LIMIT
+
+#ifdef TORQUE_SUM_THRUST_LIMIT
+static int32_t thrust_limit_q = 27000; 
+#endif
+
 static uint32_t idleThrust = DEFAULT_IDLE_THRUST;
 static float armLength = 0.046f; // m;
 static float thrustToTorque = 0.005964552f;
@@ -47,7 +53,7 @@ static float thrustToTorque = 0.005964552f;
 // thrust = a * pwm^2 + b * pwm
 static float pwmToThrustA = 0.091492681f;
 static float pwmToThrustB = 0.067673604f;
-static uint16_t min_thrust = 3000;
+static uint16_t min_thrust = 4000;
 
 int powerDistributionMotorType(uint32_t id)
 {
@@ -91,7 +97,15 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motor
     thrust = -min;
   else
     thrust = (uint32_t)control->thrust;
-
+#ifdef TORQUE_SUM_THRUST_LIMIT
+  if (control->thrust < thrust_limit_q)
+  {
+    if (thrust > thrust_limit_q)
+    {
+      thrust = thrust_limit_q;
+    }
+  }
+#endif
   if (thrust > 100)
     thrust = thrust + min_thrust;
 
@@ -130,6 +144,9 @@ PARAM_GROUP_START(powerDist)
  */
 PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, idleThrust, &idleThrust)
 PARAM_ADD_CORE(PARAM_UINT16, mt, &min_thrust)
+#ifdef TORQUE_SUM_THRUST_LIMIT
+PARAM_ADD_CORE(PARAM_INT32, tlq, &thrust_limit_q)
+#endif
 PARAM_GROUP_STOP(powerDist)
 
 /**

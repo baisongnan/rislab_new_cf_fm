@@ -479,7 +479,7 @@ static void stabilizerTask(void *param)
       {
         FloatWithTwoHalfPrecision.buffer = setpoint.attitude.pitch;
         setpoint.attitude.pitch = (float)FloatWithTwoHalfPrecision.halves.pitch_angle;
-        leg_angle = -(float)FloatWithTwoHalfPrecision.halves.leg_angle;
+        leg_angle = (float)FloatWithTwoHalfPrecision.halves.leg_angle;
       }
 
       // controller(&control, &setpoint, &sensorData, &state, tick);
@@ -499,7 +499,7 @@ static void stabilizerTask(void *param)
         // landing
         delta_l_max = get_tof_distance();
         omega_mean[0] = sensorData.gyro.x;
-        omega_mean[1] = sensorData.gyro.y - get_leg_veloicity() * 57.295779513082f;
+        omega_mean[1] = sensorData.gyro.y + (get_leg_veloicity() * 57.295779513082f);
         // omega_mean[2] = sensorData.gyro.z;
         leg_angle_LDTO = foc_get_leg_angle();
         q_LDTO[0] = state.attitudeQuaternion.x;
@@ -532,7 +532,7 @@ static void stabilizerTask(void *param)
         }
         uint16_t cyclesP1 = cycles + 1;
         omega_mean[0] = (cycles * omega_mean[0] / cyclesP1) + (sensorData.gyro.x / (cyclesP1));
-        omega_mean[1] = (cycles * omega_mean[1] / cyclesP1) + ((sensorData.gyro.y - get_leg_veloicity() * 57.295779513082f)/ (cyclesP1));
+        omega_mean[1] = (cycles * omega_mean[1] / cyclesP1) + ((sensorData.gyro.y + (get_leg_veloicity() * 57.295779513082f)) / (cyclesP1));
         // omega_mean[2] = (cycles * omega_mean[2] / cyclesP1) + (sensorData.gyro.z / (cyclesP1));
         cycles = cyclesP1;
       }
