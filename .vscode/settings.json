@@ -27,6 +27,7 @@
         "math.h": "c",
         "stabilizer.h": "c",
         "config.h": "c",
-        "console.h": "c"
+        "console.h": "c",
+        "uart1.h": "c"
     }
 }
