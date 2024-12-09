@@ -150,7 +150,7 @@ void focTask(void *param)
     // main loop
     while (1)
     {
-        vTaskDelay(M2T(2));
+        vTaskDelay(M2T(1));
 
         if (enable_foc_motor)
         {

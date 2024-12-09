@@ -614,13 +614,28 @@ static void stabilizerTask(void *param)
           tau_omega_x = tau_omega_x / norm_tau_omega * norm_tau_omega_limit;
           tau_omega_y = tau_omega_y / norm_tau_omega * norm_tau_omega_limit;
         }
-
+        
         Kvq_torque = Kvq_torque * (1 - Kvq_filter_gain) + (Kvq * get_vq()) * Kvq_filter_gain;
 
         control.thrust = setpoint.thrust;
         control.roll = (int16_t)limint16(tau_x * kp_x_temp + tau_omega_x * kd_x);
         control.pitch = -(int16_t)limint16(tau_y * kp_y_temp + tau_omega_y * kd_y + Kvq_torque);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (-sensorData.gyro.z) * kd_z);
+
+        // if (control.yaw > 20000)
+        //   control.yaw = 20000;
+        // if (control.yaw < -20000)
+        //   control.yaw = -20000;
+
+        // if (control.roll > 10000)
+        //   control.roll = 10000;
+        // if (control.roll < -10000)
+        //   control.roll = -10000;
+
+        // if (control.pitch > 10000)
+        //   control.pitch = 10000;
+        // if (control.pitch < -10000)
+        //   control.pitch = -10000;
       }
       else
       {
