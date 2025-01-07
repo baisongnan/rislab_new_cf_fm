@@ -48,6 +48,7 @@ static float thrustToTorque = 0.005964552f;
 static float pwmToThrustA = 0.091492681f;
 static float pwmToThrustB = 0.067673604f;
 static uint16_t min_thrust = 3000;
+static int32_t TL = 20000;
 
 int powerDistributionMotorType(uint32_t id)
 {
@@ -69,6 +70,16 @@ bool powerDistributionTest(void)
   return pass;
 }
 
+uint16_t limitThrust(int32_t value)
+{
+  if (value < 0)
+  value = 0;
+
+  if (value > TL)
+  value = TL;
+
+  return value;
+}
 
 void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motorThrustUncapped)
 {
@@ -100,10 +111,10 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t *motor
   att[2] = att[2] + thrust;
   att[3] = att[3] + thrust;
 
-  motorThrustUncapped->motors.m1 = limitUint16(att[0]);
-  motorThrustUncapped->motors.m2 = limitUint16(att[1]);
-  motorThrustUncapped->motors.m3 = limitUint16(att[2]);
-  motorThrustUncapped->motors.m4 = limitUint16(att[3]);
+  motorThrustUncapped->motors.m1 = limitThrust(att[0]);
+  motorThrustUncapped->motors.m2 = limitThrust(att[1]);
+  motorThrustUncapped->motors.m3 = limitThrust(att[2]);
+  motorThrustUncapped->motors.m4 = limitThrust(att[3]);
   
 }
 
@@ -130,6 +141,7 @@ PARAM_GROUP_START(powerDist)
  */
 PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, idleThrust, &idleThrust)
 PARAM_ADD_CORE(PARAM_UINT16, mt, &min_thrust)
+PARAM_ADD_CORE(PARAM_UINT32, tl, &TL)
 PARAM_GROUP_STOP(powerDist)
 
 /**
