@@ -235,6 +235,7 @@ typedef struct
   uint32_t      DMA_PerifAddr;
   uint16_t      TIM_DMASource;
   uint8_t       DMA_IRQChannel;
+  uint8_t       channel;
   /* Function pointers */
   void (*setCompare)(TIM_TypeDef* TIMx, uint32_t Compare);
   uint32_t (*getCompare)(TIM_TypeDef* TIMx);

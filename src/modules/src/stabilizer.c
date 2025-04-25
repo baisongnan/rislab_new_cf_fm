@@ -25,7 +25,7 @@
  */
 #define DEBUG_MODULE "STAB"
 
-#define FLIP_FCN
+
 
 #include <math.h>
 
@@ -59,6 +59,19 @@
 #include "static_mem.h"
 #include "rateSupervisor.h"
 
+#include "my_pwm.h"
+#include "my_power_distribution.h"
+#include "my_controller.h"
+#include "stm32f4xx_tim.h"
+
+
+static float fx = 0.0f;
+static float fy = 0.0f;
+static float fz = 0.0f;
+static float tx = 0.0f;
+static float ty = 0.0f;
+static float tz = 0.0f;
+
 static bool isInit;
 static bool emergencyStop = false;
 // static int emergencyStopTimeout = EMERGENCY_STOP_TIMEOUT_DISABLED;
@@ -75,9 +88,9 @@ static float attitude_control_limit;
 static float idle_thrust;
 bool thrust_flag;
 
-static motors_thrust_uncapped_t motorThrustUncapped;
-static motors_thrust_uncapped_t motorThrustBatCompUncapped;
-static motors_thrust_pwm_t motorPwm;
+// static motors_thrust_uncapped_t motorThrustUncapped;
+// static motors_thrust_uncapped_t motorThrustBatCompUncapped;
+// static motors_thrust_pwm_t motorPwm;
 
 static StateEstimatorType estimatorType;
 static ControllerType controllerType;
@@ -92,9 +105,6 @@ static float kp_z = 6000;
 static float kp_z_temp = 6000;
 
 static float norm_tau_omega_limit = 100.0f;
-
-// static float angle_error_threshold = 1.57f;
-// static float angle_error_velocity = 300.0f;
 
 static float kd_xy = 10;
 static float kd_z = 10;
@@ -124,14 +134,7 @@ static float qz_desired_delay = 0.0f;
 uint32_t timestamp_setpoint = 0;
 
 static float external_loop_freq = 100.0f;
-// static uint32_t time_gap_setpoint = 10000;
 
-#ifdef FLIP_FCN
-float flip_thrust;
-static int16_t flip_roll = 10000;
-float flip_thrust = 1380;
-float switch_angle = 130;
-#endif
 
 float limint16(float in)
 {
@@ -162,87 +165,9 @@ bool same_attitude(float w, float x, float y, float z, float w_d, float x_d, flo
   return fabsf(dot_product) > 0.999999f;
 }
 
-// void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
-//               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
-// {
-//   if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
-//   {
-//     *tau_x = 0.0F;
-//     *tau_y = 0.0F;
-//     *tau_z = 0.0F;
-//   }
-//   else
-//   {
-//     float b_temp2_tmp;
-//     float temp2_tmp;
-//     float wwd;
-//     float x2;
-//     float xd2;
-//     float xxd;
-//     float y2;
-//     float yd2;
-//     float yyd;
-//     float z2;
-//     float zd2;
-//     float zzd;
-//     wwd = w * w_d;
-//     xxd = x * x_d;
-//     yyd = y * y_d;
-//     zzd = z * z_d;
-//     x2 = x * x;
-//     y2 = y * y;
-//     z2 = z * z;
-//     xd2 = x_d * x_d;
-//     yd2 = y_d * y_d;
-//     zd2 = z_d * z_d;
-//     temp2_tmp = 2.0F * xxd;
-//     b_temp2_tmp = 2.0F * wwd;
-//     x2 = (((((((((((((((((((-2.0F * x2 * xd2 - x2 * yd2) - x2 * zd2) + x2) -
-//                          temp2_tmp * yyd) -
-//                         temp2_tmp * zzd) -
-//                        b_temp2_tmp * xxd) -
-//                       xd2 * y2) -
-//                      xd2 * z2) +
-//                     xd2) -
-//                    2.0F * y2 * yd2) -
-//                   y2 * zd2) +
-//                  y2) -
-//                 2.0F * yyd * zzd) -
-//                b_temp2_tmp * yyd) -
-//               yd2 * z2) +
-//              yd2) -
-//             2.0F * z2 * zd2) +
-//            z2) -
-//           b_temp2_tmp * zzd) +
-//          zd2;
-//     if (x2 <= 0.0F)
-//     {
-//       *tau_x = 0.0F;
-//       *tau_y = 0.0F;
-//       *tau_z = 0.0F;
-//     }
-//     else
-//     {
-//       x2 = 2.0F * acosf(((wwd + xxd) + yyd) + zzd) / sqrtf(x2);
-//       *tau_x = x2 * (((w * x_d - w_d * x) - y * z_d) + y_d * z);
-//       *tau_y = x2 * (((w * y_d - w_d * y) + x * z_d) - x_d * z);
-//       *tau_z = x2 * (((w * z_d - w_d * z) - x * y_d) + x_d * y);
-//     }
-//   }
-// }
-
 void pcontrol(float w, float x, float y, float z, float w_d, float x_d,
               float y_d, float z_d, float *tau_x, float *tau_y, float *tau_z)
 {
-
-  // if (w*w_d<0.0f)
-  // {
-  //   w_d = -w_d;
-  //   x_d = -x_d;
-  //   y_d = -y_d;
-  //   z_d = -z_d;
-  // }
-
   if (same_attitude(w, x, y, z, w_d, x_d, y_d, z_d))
   {
     *tau_x = 0.0F;
@@ -330,21 +255,6 @@ static struct
   int16_t rateYaw;
 } stateCompressed;
 
-// static struct {
-//   // position - mm
-//   int16_t x;
-//   int16_t y;
-//   int16_t z;
-//   // velocity - mm / sec
-//   int16_t vx;
-//   int16_t vy;
-//   int16_t vz;
-//   // acceleration - mm / sec^2
-//   int16_t ax;
-//   int16_t ay;
-//   int16_t az;
-// } setpointCompressed;
-
 STATIC_MEM_TASK_ALLOC(stabilizerTask, STABILIZER_TASK_STACKSIZE);
 
 static void stabilizerTask(void *param);
@@ -416,19 +326,6 @@ static void compressState()
   stateCompressed.rateYaw = sensorData.gyro.z * deg2millirad;
 }
 
-// static void compressSetpoint()
-// {
-//   setpointCompressed.x = setpoint.position.x * 1000.0f;
-//   setpointCompressed.y = setpoint.position.y * 1000.0f;
-//   setpointCompressed.z = setpoint.position.z * 1000.0f;
-//   setpointCompressed.vx = setpoint.velocity.x * 1000.0f;
-//   setpointCompressed.vy = setpoint.velocity.y * 1000.0f;
-//   setpointCompressed.vz = setpoint.velocity.z * 1000.0f;
-//   setpointCompressed.ax = setpoint.acceleration.x * 1000.0f;
-//   setpointCompressed.ay = setpoint.acceleration.y * 1000.0f;
-//   setpointCompressed.az = setpoint.acceleration.z * 1000.0f;
-// }
-
 void stabilizerInit(StateEstimatorType estimator)
 {
   if (isInit)
@@ -439,6 +336,9 @@ void stabilizerInit(StateEstimatorType estimator)
   controllerInit(ControllerTypeAutoSelect);
   powerDistributionInit();
   motorsInit(platformConfigGetMotorMapping());
+
+  // More PWM pins init
+  PWM_interface_init();
   // collisionAvoidanceInit();
   estimatorType = stateEstimatorGetType();
   controllerType = controllerGetType();
@@ -462,33 +362,23 @@ bool stabilizerTest(void)
   return pass;
 }
 
-// static void checkEmergencyStopTimeout()
-// {
-//   if (emergencyStopTimeout >= 0) {
-//     emergencyStopTimeout -= 1;
-//     if (emergencyStopTimeout == 0) {
-//       emergencyStop = true;
-//     }
+// static void batteryCompensation(const motors_thrust_uncapped_t *motorThrustUncapped, motors_thrust_uncapped_t *motorThrustBatCompUncapped)
+// { 
+//   float supplyVoltage = pmGetBatteryVoltage();
+
+//   for (int motor = 0; motor < STABILIZER_NR_OF_MOTORS; motor++)
+//   {
+//     motorThrustBatCompUncapped->list[motor] = motorsCompensateBatteryVoltage(motor, motorThrustUncapped->list[motor], supplyVoltage);
 //   }
 // }
 
-static void batteryCompensation(const motors_thrust_uncapped_t *motorThrustUncapped, motors_thrust_uncapped_t *motorThrustBatCompUncapped)
-{
-  float supplyVoltage = pmGetBatteryVoltage();
-
-  for (int motor = 0; motor < STABILIZER_NR_OF_MOTORS; motor++)
-  {
-    motorThrustBatCompUncapped->list[motor] = motorsCompensateBatteryVoltage(motor, motorThrustUncapped->list[motor], supplyVoltage);
-  }
-}
-
-static void setMotorRatios(const motors_thrust_pwm_t *motorPwm)
-{
-  motorsSetRatio(MOTOR_M1, motorPwm->motors.m1);
-  motorsSetRatio(MOTOR_M2, motorPwm->motors.m2);
-  motorsSetRatio(MOTOR_M3, motorPwm->motors.m3);
-  motorsSetRatio(MOTOR_M4, motorPwm->motors.m4);
-}
+// static void setMotorRatios(const motors_thrust_pwm_t *motorPwm)
+// {
+//   motorsSetRatio(MOTOR_M1, motorPwm->motors.m1);
+//   motorsSetRatio(MOTOR_M2, motorPwm->motors.m2);
+//   motorsSetRatio(MOTOR_M3, motorPwm->motors.m3);
+//   motorsSetRatio(MOTOR_M4, motorPwm->motors.m4);
+// }
 
 /* The stabilizer loop runs at 1kHz. It is the
  * responsibility of the different functions to run slower by skipping call
@@ -625,21 +515,6 @@ static void stabilizerTask(void *param)
                  qz_desired,
                  &tau_x, &tau_y, &tau_z);
 
-        // float angle_error = sqrtf(tau_x * tau_x + tau_y * tau_y + tau_z * tau_z);
-
-        // if (angle_error > angle_error_threshold)
-        // {
-        //   omega_x = (tau_x/angle_error) * angle_error_velocity;
-        //   omega_y = (tau_y/angle_error) * angle_error_velocity;
-        //   omega_z = (tau_z/angle_error) * angle_error_velocity;
-        // }
-        // else
-        // {
-        //   omega_x = 0.0f;
-        //   omega_y = 0.0f;
-        //   omega_z = 0.0f;
-        // }
-
         tau_x = tau_x + tau_x_offset;
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
@@ -658,19 +533,6 @@ static void stabilizerTask(void *param)
         control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
         control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
         control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_x - sensorData.gyro.z) * kd_z);
-#ifdef FLIP_FCN
-        if (fabsf(flip_thrust - setpoint.thrust) < 2.0f)
-        {
-          if (state.attitude.roll > -30 && state.attitude.roll < switch_angle)
-            control.roll = flip_roll;
-          else
-            control.roll = -flip_roll;
-
-          control.thrust = 1000.0f;
-          control.pitch = 0;
-          control.yaw = 0;
-        }
-#endif
       }
       else
       {
@@ -686,10 +548,11 @@ static void stabilizerTask(void *param)
       }
       else
       {
-        powerDistribution(&control, &motorThrustUncapped);
-        batteryCompensation(&motorThrustUncapped, &motorThrustBatCompUncapped);
-        powerDistributionCap(&motorThrustBatCompUncapped, &motorPwm);
-        setMotorRatios(&motorPwm);
+        power_distribution_calc(fx, fy, fz, tx, ty, tz);
+        // powerDistribution(&control, &motorThrustUncapped);
+        // batteryCompensation(&motorThrustUncapped, &motorThrustBatCompUncapped);
+        // powerDistributionCap(&motorThrustBatCompUncapped, &motorPwm);
+        // setMotorRatios(&motorPwm);
       }
 
       calcSensorToOutputLatency(&sensorData);
@@ -748,12 +611,7 @@ PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
 PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 
-#ifdef FLIP_FCN
-PARAM_ADD(PARAM_INT16, fr, &flip_roll)
-PARAM_ADD(PARAM_FLOAT, sa, &switch_angle)
 
-
-#endif
 
 PARAM_GROUP_STOP(stabilizer)
 
@@ -1200,27 +1058,34 @@ LOG_GROUP_STOP(stateEstimateZ)
 
 LOG_GROUP_START(motor)
 
-/**
- * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
- * and may have values outside the [0 - UINT16_MAX] range.
- */
-LOG_ADD(LOG_INT32, m1req, &motorThrustBatCompUncapped.motors.m1)
+LOG_ADD(LOG_FLOAT, fx, &fx)
+LOG_ADD(LOG_FLOAT, fy, &fy)
+LOG_ADD(LOG_FLOAT, fz, &fz)
+LOG_ADD(LOG_FLOAT, tx, &tx)
+LOG_ADD(LOG_FLOAT, ty, &ty)
+LOG_ADD(LOG_FLOAT, tz, &tz)
 
 /**
  * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
  * and may have values outside the [0 - UINT16_MAX] range.
  */
-LOG_ADD(LOG_INT32, m2req, &motorThrustBatCompUncapped.motors.m2)
+// LOG_ADD(LOG_INT32, m1req, &motorThrustBatCompUncapped.motors.m1)
 
 /**
  * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
  * and may have values outside the [0 - UINT16_MAX] range.
  */
-LOG_ADD(LOG_INT32, m3req, &motorThrustBatCompUncapped.motors.m3)
+// LOG_ADD(LOG_INT32, m2req, &motorThrustBatCompUncapped.motors.m2)
 
 /**
  * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
  * and may have values outside the [0 - UINT16_MAX] range.
  */
-LOG_ADD(LOG_INT32, m4req, &motorThrustBatCompUncapped.motors.m4)
+// LOG_ADD(LOG_INT32, m3req, &motorThrustBatCompUncapped.motors.m3)
+
+/**
+ * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
+ * and may have values outside the [0 - UINT16_MAX] range.
+ */
+// LOG_ADD(LOG_INT32, m4req, &motorThrustBatCompUncapped.motors.m4)
 LOG_GROUP_STOP(motor)

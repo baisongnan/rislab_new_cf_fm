@@ -75,3 +75,8 @@ obj-$(CONFIG_ESTIMATOR_KALMAN_ENABLE) += kalman_core/
 
 # Lighthouse
 obj-y += lighthouse/
+
+
+obj-y += my_pwm.o
+obj-y += my_power_distribution.o
+obj-y += my_controller.o
