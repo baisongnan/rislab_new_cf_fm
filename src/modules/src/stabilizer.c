@@ -62,6 +62,40 @@
 #include "my_controller.h"
 #include "stm32f4xx_tim.h"
 
+union
+{
+  float buffer;
+  struct
+  {
+    __fp16 thrust;
+    __fp16 angle;
+  } halves;
+} Yaw_FloatWithTwoHalfPrecision;
+
+union
+{
+  float buffer;
+  struct
+  {
+    __fp16 thrust;
+    __fp16 angle;
+  } halves;
+} Pitch_FloatWithTwoHalfPrecision;
+
+union
+{
+  float buffer;
+  struct
+  {
+    __fp16 thrust;
+    __fp16 angle;
+  } halves;
+} Roll_FloatWithTwoHalfPrecision;
+
+float thrust_z = 0.0f;
+float thrust_y = 0.0f;
+float thrust_x = 0.0f;
+
 // static float fx = 0.0f;
 // static float fy = 0.0f;
 // static float fz = 0.0f;
@@ -416,6 +450,18 @@ static void stabilizerTask(void *param)
       commanderGetSetpoint(&setpoint, &state);
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
+      Yaw_FloatWithTwoHalfPrecision.buffer = setpoint.attitudeRate.yaw;
+      setpoint.attitudeRate.yaw = (float)Yaw_FloatWithTwoHalfPrecision.halves.angle;
+      thrust_z = (float)Yaw_FloatWithTwoHalfPrecision.halves.thrust;
+
+      Pitch_FloatWithTwoHalfPrecision.buffer = setpoint.attitude.pitch;
+      setpoint.attitude.pitch = (float)Pitch_FloatWithTwoHalfPrecision.halves.angle;
+      thrust_y = (float)Pitch_FloatWithTwoHalfPrecision.halves.thrust;
+
+      Roll_FloatWithTwoHalfPrecision.buffer = setpoint.attitude.roll;
+      setpoint.attitude.roll = (float)Roll_FloatWithTwoHalfPrecision.halves.angle;
+      thrust_x = (float)Roll_FloatWithTwoHalfPrecision.halves.thrust;
+
       if (timestamp_setpoint == setpoint.timestamp)
       {
         // no control input is received
@@ -426,10 +472,8 @@ static void stabilizerTask(void *param)
         // control input is received
         if (setpoint.timestamp > timestamp_setpoint)
         {
-          // time_gap_setpoint = setpoint.timestamp - timestamp_setpoint;
           timestamp_setpoint = setpoint.timestamp;
         }
-
         // compute desired quat
         eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
                     setpoint.attitude.pitch * -0.0174532925199433f,
@@ -487,8 +531,8 @@ static void stabilizerTask(void *param)
           stop_flag = true;
         else
           stop_flag = false;
-
-        power_distribution_calc(0, 0, 0, control.roll, control.pitch, control.yaw, stop_flag);
+          
+        power_distribution_calc(thrust_x, thrust_y, thrust_z, control.roll, control.pitch, control.yaw, stop_flag);
         // powerDistribution(&control, &motorThrustUncapped);
         // batteryCompensation(&motorThrustUncapped, &motorThrustBatCompUncapped);
         // powerDistributionCap(&motorThrustBatCompUncapped, &motorPwm);
