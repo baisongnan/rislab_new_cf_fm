@@ -25,8 +25,6 @@
  */
 #define DEBUG_MODULE "STAB"
 
-
-
 #include <math.h>
 
 #include "FreeRTOS.h"
@@ -64,13 +62,13 @@
 #include "my_controller.h"
 #include "stm32f4xx_tim.h"
 
-
-static float fx = 0.0f;
-static float fy = 0.0f;
-static float fz = 0.0f;
-static float tx = 0.0f;
-static float ty = 0.0f;
-static float tz = 0.0f;
+// static float fx = 0.0f;
+// static float fy = 0.0f;
+// static float fz = 0.0f;
+// static float tx = 0.0f;
+// static float ty = 0.0f;
+// static float tz = 0.0f;
+static uint8_t stop_flag = false; // stop is enable
 
 static bool isInit;
 static bool emergencyStop = false;
@@ -99,15 +97,13 @@ static STATS_CNT_RATE_DEFINE(stabilizerRate, 500);
 static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
 
-static float kp_xy = 6000;
-static float kp_xy_temp = 6000;
-static float kp_z = 6000;
-static float kp_z_temp = 6000;
+static float kp_xy = 0;
+static float kp_xy_temp = 0;
+static float kp_z = 0;
+static float kp_z_temp = 0;
 
-static float norm_tau_omega_limit = 100.0f;
-
-static float kd_xy = 10;
-static float kd_z = 10;
+static float kd_xy = 0;
+static float kd_z = 0;
 
 static float tau_x_offset = 0.0f;
 static float tau_y_offset = 0.0f;
@@ -134,7 +130,6 @@ static float qz_desired_delay = 0.0f;
 uint32_t timestamp_setpoint = 0;
 
 static float external_loop_freq = 100.0f;
-
 
 float limint16(float in)
 {
@@ -363,7 +358,7 @@ bool stabilizerTest(void)
 }
 
 // static void batteryCompensation(const motors_thrust_uncapped_t *motorThrustUncapped, motors_thrust_uncapped_t *motorThrustBatCompUncapped)
-// { 
+// {
 //   float supplyVoltage = pmGetBatteryVoltage();
 
 //   for (int motor = 0; motor < STABILIZER_NR_OF_MOTORS; motor++)
@@ -413,9 +408,6 @@ static void stabilizerTask(void *param)
   attitude_control_limit = 1300.0f;
   thrust_flag = true;
 
-  float tau_omega_x = 0.0f;
-  float tau_omega_y = 0.0f;
-  float norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
 
   while (1)
   {
@@ -518,21 +510,13 @@ static void stabilizerTask(void *param)
         tau_x = tau_x + tau_x_offset;
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
+        
 
-        tau_omega_x = omega_x - sensorData.gyro.x;
-        tau_omega_y = omega_x - sensorData.gyro.y;
-        norm_tau_omega = sqrtf(tau_omega_x * tau_omega_x + tau_omega_y * tau_omega_y);
-
-        if (norm_tau_omega > norm_tau_omega_limit)
-        {
-          tau_omega_x = tau_omega_x / norm_tau_omega * norm_tau_omega_limit;
-          tau_omega_y = tau_omega_y / norm_tau_omega * norm_tau_omega_limit;
-        }
 
         control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
-        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_x - sensorData.gyro.z) * kd_z);
+        control.roll = (int16_t)limint16(tau_x * kp_xy_temp  - sensorData.gyro.x * kd_xy);
+        control.pitch = (int16_t)limint16(tau_y * kp_xy_temp - sensorData.gyro.y * kd_xy);
+        control.yaw = (int16_t)limint16(tau_z * kp_z  - sensorData.gyro.z * kd_z);
       }
       else
       {
@@ -548,7 +532,12 @@ static void stabilizerTask(void *param)
       }
       else
       {
-        power_distribution_calc(fx, fy, fz, tx, ty, tz);
+        if (control.thrust >= 100)
+          stop_flag = true;
+        else
+          stop_flag = false;
+
+        power_distribution_calc(0, 0, 0, control.roll, control.pitch, control.yaw, stop_flag);
         // powerDistribution(&control, &motorThrustUncapped);
         // batteryCompensation(&motorThrustUncapped, &motorThrustBatCompUncapped);
         // powerDistributionCap(&motorThrustBatCompUncapped, &motorPwm);
@@ -609,9 +598,14 @@ PARAM_ADD(PARAM_FLOAT, qxo, &tau_x_offset)
 PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
 PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
 
-PARAM_ADD(PARAM_FLOAT, ntol, &norm_tau_omega_limit)
 
-
+PARAM_ADD(PARAM_UINT8, stopf, &stop_flag)
+// PARAM_ADD(PARAM_FLOAT, fx, &fx)
+// PARAM_ADD(PARAM_FLOAT, fy, &fy)
+// PARAM_ADD(PARAM_FLOAT, fz, &fz)
+// PARAM_ADD(PARAM_FLOAT, tx, &tx)
+// PARAM_ADD(PARAM_FLOAT, ty, &ty)
+// PARAM_ADD(PARAM_FLOAT, tz, &tz)
 
 PARAM_GROUP_STOP(stabilizer)
 
@@ -1056,36 +1050,3 @@ LOG_ADD(LOG_INT16, ratePitch, &stateCompressed.ratePitch)
 LOG_ADD(LOG_INT16, rateYaw, &stateCompressed.rateYaw)
 LOG_GROUP_STOP(stateEstimateZ)
 
-LOG_GROUP_START(motor)
-
-LOG_ADD(LOG_FLOAT, fx, &fx)
-LOG_ADD(LOG_FLOAT, fy, &fy)
-LOG_ADD(LOG_FLOAT, fz, &fz)
-LOG_ADD(LOG_FLOAT, tx, &tx)
-LOG_ADD(LOG_FLOAT, ty, &ty)
-LOG_ADD(LOG_FLOAT, tz, &tz)
-
-/**
- * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
- * and may have values outside the [0 - UINT16_MAX] range.
- */
-// LOG_ADD(LOG_INT32, m1req, &motorThrustBatCompUncapped.motors.m1)
-
-/**
- * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
- * and may have values outside the [0 - UINT16_MAX] range.
- */
-// LOG_ADD(LOG_INT32, m2req, &motorThrustBatCompUncapped.motors.m2)
-
-/**
- * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
- * and may have values outside the [0 - UINT16_MAX] range.
- */
-// LOG_ADD(LOG_INT32, m3req, &motorThrustBatCompUncapped.motors.m3)
-
-/**
- * @brief Requested motor power for m1, including battery compensation. Same scale as the motor PWM but uncapped
- * and may have values outside the [0 - UINT16_MAX] range.
- */
-// LOG_ADD(LOG_INT32, m4req, &motorThrustBatCompUncapped.motors.m4)
-LOG_GROUP_STOP(motor)
