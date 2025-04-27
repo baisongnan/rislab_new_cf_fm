@@ -98,9 +98,7 @@ static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
 
 static float kp_xy = 0;
-static float kp_xy_temp = 0;
 static float kp_z = 0;
-static float kp_z_temp = 0;
 
 static float kd_xy = 0;
 static float kd_z = 0;
@@ -113,19 +111,10 @@ static float tau_x = 0.0f;
 static float tau_y = 0.0f;
 static float tau_z = 0.0f;
 
-static float omega_x = 0.0f;
-static float omega_y = 0.0f;
-static float omega_z = 0.0f;
-
 static float qw_desired = 1.0f;
 static float qx_desired = 0.0f;
 static float qy_desired = 0.0f;
 static float qz_desired = 0.0f;
-
-static float qw_desired_delay = 1.0f;
-static float qx_desired_delay = 0.0f;
-static float qy_desired_delay = 0.0f;
-static float qz_desired_delay = 0.0f;
 
 uint32_t timestamp_setpoint = 0;
 
@@ -408,7 +397,6 @@ static void stabilizerTask(void *param)
   attitude_control_limit = 1300.0f;
   thrust_flag = true;
 
-
   while (1)
   {
     // The sensor should unlock at 1kHz
@@ -428,18 +416,6 @@ static void stabilizerTask(void *param)
       commanderGetSetpoint(&setpoint, &state);
       // controller(&control, &setpoint, &sensorData, &state, tick);
 
-      // disable P controller when thrust is equal to attitude_control_limit
-      if (fabsf(setpoint.thrust - attitude_control_limit) < 10.0f)
-      {
-        kp_xy_temp = 0.0f;
-        kp_z_temp = 0.0f;
-      }
-      else
-      {
-        kp_xy_temp = kp_xy;
-        kp_z_temp = kp_z;
-      }
-
       if (timestamp_setpoint == setpoint.timestamp)
       {
         // no control input is received
@@ -449,14 +425,10 @@ static void stabilizerTask(void *param)
       {
         // control input is received
         if (setpoint.timestamp > timestamp_setpoint)
+        {
           // time_gap_setpoint = setpoint.timestamp - timestamp_setpoint;
-
           timestamp_setpoint = setpoint.timestamp;
-
-        qw_desired_delay = qw_desired;
-        qx_desired_delay = qx_desired;
-        qy_desired_delay = qy_desired;
-        qz_desired_delay = qz_desired;
+        }
 
         // compute desired quat
         eul2quat_my(setpoint.attitudeRate.yaw * -0.0174532925199433f,
@@ -466,25 +438,6 @@ static void stabilizerTask(void *param)
                     &qx_desired,
                     &qy_desired,
                     &qz_desired);
-
-        pcontrol(qw_desired_delay,
-                 qx_desired_delay,
-                 qy_desired_delay,
-                 qz_desired_delay,
-                 qw_desired,
-                 qx_desired,
-                 qy_desired,
-                 qz_desired,
-                 &omega_x, &omega_y, &omega_z);
-
-        // // desired angular rate in degrees
-        omega_x = omega_x * 57.2957795130823f * external_loop_freq;
-        omega_y = omega_y * 57.2957795130823f * external_loop_freq;
-        omega_z = omega_z * 57.2957795130823f * external_loop_freq;
-
-        omega_x = lim_num(omega_x, 300);
-        omega_y = lim_num(omega_y, 300);
-        omega_z = lim_num(omega_z, 300);
       }
 
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
@@ -510,13 +463,11 @@ static void stabilizerTask(void *param)
         tau_x = tau_x + tau_x_offset;
         tau_y = tau_y + tau_y_offset;
         tau_z = tau_z + tau_z_offset;
-        
-
 
         control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy_temp  - sensorData.gyro.x * kd_xy);
-        control.pitch = (int16_t)limint16(tau_y * kp_xy_temp - sensorData.gyro.y * kd_xy);
-        control.yaw = (int16_t)limint16(tau_z * kp_z  - sensorData.gyro.z * kd_z);
+        control.roll = (int16_t)limint16(tau_x * kp_xy - sensorData.gyro.x * kd_xy);
+        control.pitch = (int16_t)limint16(tau_y * kp_xy - sensorData.gyro.y * kd_xy);
+        control.yaw = (int16_t)limint16(tau_z * kp_z - sensorData.gyro.z * kd_z);
       }
       else
       {
@@ -597,7 +548,6 @@ PARAM_ADD(PARAM_FLOAT, exfreq, &external_loop_freq)
 PARAM_ADD(PARAM_FLOAT, qxo, &tau_x_offset)
 PARAM_ADD(PARAM_FLOAT, qyo, &tau_y_offset)
 PARAM_ADD(PARAM_FLOAT, qzo, &tau_z_offset)
-
 
 PARAM_ADD(PARAM_UINT8, stopf, &stop_flag)
 // PARAM_ADD(PARAM_FLOAT, fx, &fx)
@@ -730,10 +680,6 @@ LOG_GROUP_STOP(ctrltarget)
  * for the stabilizer module
  */
 LOG_GROUP_START(stabilizer)
-
-// LOG_ADD(LOG_FLOAT, omx, &omega_x)
-// LOG_ADD(LOG_FLOAT, omy, &omega_y)
-// LOG_ADD(LOG_FLOAT, omz, &omega_z)
 
 // LOG_ADD(LOG_FLOAT, taux, &tau_x)
 // LOG_ADD(LOG_FLOAT, tauy, &tau_y)
@@ -1049,4 +995,3 @@ LOG_ADD(LOG_INT16, ratePitch, &stateCompressed.ratePitch)
  */
 LOG_ADD(LOG_INT16, rateYaw, &stateCompressed.rateYaw)
 LOG_GROUP_STOP(stateEstimateZ)
-
