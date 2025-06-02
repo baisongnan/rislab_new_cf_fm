@@ -607,7 +607,7 @@ static void stabilizerTask(void *param)
 
       if (fabsf(setpoint.thrust - idle_thrust) < 10.0f)
       {
-        control.thrust = 500.0f;
+        control.thrust = 1500.0f;
         control.roll = 0.0f;
         control.pitch = 0.0f;
         control.yaw = 0.0f;
@@ -886,6 +886,8 @@ LOG_GROUP_START(stabilizer)
 // LOG_ADD(LOG_FLOAT, taux, &tau_x)
 // LOG_ADD(LOG_FLOAT, tauy, &tau_y)
 
+
+LOG_ADD(LOG_INT16, croll, &control.roll)
 /**
  * @brief Estimated roll
  *   Note: Same as stateEstimate.roll
