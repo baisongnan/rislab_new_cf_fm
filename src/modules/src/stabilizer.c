@@ -97,8 +97,7 @@ static float norm_tau_omega_limit = 100.0f;
 static float JSTO_acc_z_limit = 1.5;
 static uint8_t jumping_state = false;
 static uint8_t jumping_state_old = false;
-static int16_t delta_l_max = -225;
-static int16_t delta_l_max_state = -225;
+
 static float omega_mean[3] = {0.0f, 0.0f, 0.0f};
 // static float omega_mean_world[3] = {0.0f, 0.0f, 0.0f};
 // static float quat_TO[4] = {1.0f, 0.0f, 0.0f, 0.0f};
@@ -505,7 +504,7 @@ static void stabilizerTask(void *param)
       if (jumping_state && !jumping_state_old)
       {
         // landing
-        delta_l_max = get_tof_distance();
+
         omega_mean[0] = sensorData.gyro.x;
         omega_mean[1] = sensorData.gyro.y;
         omega_mean[2] = sensorData.gyro.z;
@@ -529,10 +528,7 @@ static void stabilizerTask(void *param)
       else if (jumping_state)
       {
         // stance phase
-        if (get_tof_distance() > delta_l_max)
-        {
-          delta_l_max = get_tof_distance();
-        }
+
         uint16_t cyclesP1 = cycles + 1;
         omega_mean[0] = (cycles * omega_mean[0] / cyclesP1) + (sensorData.gyro.x / (cyclesP1));
         omega_mean[1] = (cycles * omega_mean[1] / cyclesP1) + (sensorData.gyro.y / (cyclesP1));
@@ -545,10 +541,7 @@ static void stabilizerTask(void *param)
         //     &omega_mean_world[0], &omega_mean_world[1], &omega_mean_world[2]);
       }
 
-      if (jumping_state)
-        delta_l_max_state = delta_l_max;
-      else
-        delta_l_max_state = -delta_l_max;
+
 
       // JSTO end
 
@@ -836,7 +829,7 @@ LOG_GROUP_START(stabilizer)
 
 // JSTO
 LOG_ADD(LOG_UINT8, jstate, &jumping_state)
-LOG_ADD(LOG_INT16, delta_l, &delta_l_max_state)
+
 LOG_ADD(LOG_UINT16, cycles, &cycles)
 LOG_ADD(LOG_FLOAT, Ox, &omega_mean[0])
 LOG_ADD(LOG_FLOAT, Oy, &omega_mean[1])
